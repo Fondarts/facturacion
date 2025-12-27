@@ -108,6 +108,38 @@ class InvoiceRepository(
     }
     
     suspend fun getInvoiceCount(): Int = invoiceDao.getInvoiceCount()
+    
+    // Verificar si una factura es duplicada
+    suspend fun isDuplicateInvoice(invoice: Invoice): Boolean {
+        // Verificar por nombre de archivo
+        val byFileName = invoiceDao.findInvoiceByFileName(invoice.fileName)
+        if (byFileName != null && byFileName.id != invoice.id) {
+            return true
+        }
+        
+        // Verificar por fecha, establecimiento y total
+        val byData = invoiceDao.findDuplicateInvoice(invoice.date, invoice.establishment, invoice.total)
+        if (byData != null && byData.id != invoice.id) {
+            return true
+        }
+        
+        return false
+    }
+    
+    // Obtener factura duplicada si existe
+    suspend fun getDuplicateInvoice(invoice: Invoice): Invoice? {
+        val byFileName = invoiceDao.findInvoiceByFileName(invoice.fileName)
+        if (byFileName != null && byFileName.id != invoice.id) {
+            return getInvoiceById(byFileName.id)
+        }
+        
+        val byData = invoiceDao.findDuplicateInvoice(invoice.date, invoice.establishment, invoice.total)
+        if (byData != null && byData.id != invoice.id) {
+            return getInvoiceById(byData.id)
+        }
+        
+        return null
+    }
 }
 
 

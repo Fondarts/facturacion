@@ -74,6 +74,20 @@ interface InvoiceDao {
     
     @Query("SELECT COUNT(*) FROM invoices")
     suspend fun getInvoiceCount(): Int
+    
+    // Verificar si existe una factura con el mismo nombre de archivo
+    @Query("SELECT * FROM invoices WHERE fileName = :fileName LIMIT 1")
+    suspend fun findInvoiceByFileName(fileName: String): InvoiceEntity?
+    
+    // Verificar si existe una factura con la misma fecha, establecimiento y total (margen de 0.01)
+    @Query("""
+        SELECT * FROM invoices 
+        WHERE date = :date 
+        AND establishment = :establishment 
+        AND ABS(total - :total) < 0.01
+        LIMIT 1
+    """)
+    suspend fun findDuplicateInvoice(date: Date, establishment: String, total: Double): InvoiceEntity?
 }
 
 

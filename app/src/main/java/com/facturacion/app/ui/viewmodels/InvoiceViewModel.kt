@@ -52,6 +52,7 @@ class InvoiceViewModel(
         object Loading : InvoiceUiState()
         data class Success(val message: String) : InvoiceUiState()
         data class Error(val message: String) : InvoiceUiState()
+        data class Duplicate(val duplicateInvoice: Invoice) : InvoiceUiState()
     }
     
     private fun applyFilters(invoices: List<Invoice>, filter: FilterState): List<Invoice> {
@@ -115,6 +116,14 @@ class InvoiceViewModel(
         viewModelScope.launch {
             try {
                 _uiState.value = InvoiceUiState.Loading
+                
+                // Verificar si es duplicada
+                val duplicate = invoiceRepository.getDuplicateInvoice(invoice)
+                if (duplicate != null) {
+                    _uiState.value = InvoiceUiState.Duplicate(duplicate)
+                    return@launch
+                }
+                
                 invoiceRepository.insertInvoice(invoice)
                 _uiState.value = InvoiceUiState.Success("Factura guardada")
             } catch (e: Exception) {

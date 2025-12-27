@@ -67,6 +67,26 @@ fun AddInvoiceScreen(
     var showDebugText by remember { mutableStateOf(false) }
     var rawOcrText by remember { mutableStateOf<String?>(null) }
     
+    // Estado para manejar duplicados
+    val uiState by viewModel.uiState.collectAsState()
+    var showDuplicateDialog by remember { mutableStateOf(false) }
+    var duplicateInvoice by remember { mutableStateOf<com.facturacion.app.domain.models.Invoice?>(null) }
+    var pendingInvoice by remember { mutableStateOf<com.facturacion.app.domain.models.Invoice?>(null) }
+    
+    // Observar cambios en el estado
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is com.facturacion.app.ui.viewmodels.InvoiceViewModel.InvoiceUiState.Duplicate -> {
+                duplicateInvoice = state.duplicateInvoice
+                showDuplicateDialog = true
+            }
+            is com.facturacion.app.ui.viewmodels.InvoiceViewModel.InvoiceUiState.Success -> {
+                onNavigateBack()
+            }
+            else -> {}
+        }
+    }
+    
     // Launcher para tomar foto
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -367,14 +387,71 @@ fun AddInvoiceScreen(
                     fileType = savedFileType!!,
                     categoryRepository = categoryRepository,
                     onSave = { invoice ->
+                        pendingInvoice = invoice
                         viewModel.insertInvoice(invoice)
-                        onNavigateBack()
+                        // No navegar inmediatamente, esperar el resultado del estado
                     },
                     onCancel = onNavigateBack
                 )
             }
             }
         }
+    }
+    
+    // Diálogo de factura duplicada
+    if (showDuplicateDialog && duplicateInvoice != null) {
+        val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        AlertDialog(
+            onDismissRequest = {
+                showDuplicateDialog = false
+                viewModel.clearUiState()
+            },
+            title = { Text("Factura Duplicada") },
+            text = {
+                Column {
+                    Text("Ya existe una factura similar en el sistema:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("• Establecimiento: ${duplicateInvoice!!.establishment}")
+                    Text("• Fecha: ${dateFormat.format(duplicateInvoice!!.date)}")
+                    Text("• Total: $${String.format("%.2f", duplicateInvoice!!.total)}")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("¿Deseas guardarla de todas formas?")
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDuplicateDialog = false
+                        // Forzar guardado ignorando duplicado
+                        pendingInvoice?.let { invoice ->
+                            scope.launch {
+                                try {
+                                    invoiceRepository.insertInvoice(invoice)
+                                    viewModel.clearUiState()
+                                    onNavigateBack()
+                                } catch (e: Exception) {
+                                    viewModel.clearUiState()
+                                }
+                            }
+                        } ?: run {
+                            viewModel.clearUiState()
+                        }
+                    }
+                ) {
+                    Text("Guardar de todas formas")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDuplicateDialog = false
+                        viewModel.clearUiState()
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
     
     DisposableEffect(Unit) {
