@@ -1,6 +1,7 @@
 package com.facturacion.app.ui.screens.invoicepreview
 
 import android.app.Application
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.facturacion.app.data.repositories.InvoiceRepository
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -34,7 +36,8 @@ import java.util.*
 fun InvoicePreviewScreen(
     invoiceId: Long,
     invoiceRepository: InvoiceRepository,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToEdit: (Long) -> Unit
 ) {
     val context = LocalContext.current
     val viewModel: InvoiceViewModel = viewModel(
@@ -66,7 +69,7 @@ fun InvoicePreviewScreen(
                 actions = {
                     if (invoice != null) {
                         IconButton(onClick = {
-                            // Navegar a edición - esto debería pasar por parámetro
+                            onNavigateToEdit(invoiceId)
                         }) {
                             Icon(Icons.Default.Edit, contentDescription = "Editar")
                         }
@@ -104,11 +107,34 @@ fun InvoicePreviewScreen(
                     }
                 } else {
                     Card(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                // Abrir PDF con visor externo
+                                val file = File(inv.filePath)
+                                if (file.exists()) {
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        file
+                                    )
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(uri, "application/pdf")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    try {
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        // No hay visor de PDF instalado
+                                    }
+                                }
+                            }
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
                                 Icons.Default.PictureAsPdf,
@@ -118,6 +144,12 @@ fun InvoicePreviewScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("Archivo PDF")
                             Text(inv.fileName, style = MaterialTheme.typography.bodySmall)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Toca para abrir",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }

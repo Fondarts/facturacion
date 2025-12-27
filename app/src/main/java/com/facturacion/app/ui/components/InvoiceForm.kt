@@ -1,5 +1,6 @@
 package com.facturacion.app.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -92,17 +93,26 @@ fun InvoiceForm(
             style = MaterialTheme.typography.titleLarge
         )
         
+        Spacer(modifier = Modifier.height(8.dp))
+        
         // Fecha
         OutlinedTextField(
             value = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(date),
             onValueChange = {},
             label = { Text("Fecha") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showDatePicker = true },
             readOnly = true,
             trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.DateRange, contentDescription = "Seleccionar fecha")
-                    }
+                Icon(
+                    imageVector = Icons.Default.DateRange,
+                    contentDescription = "Seleccionar fecha",
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable { showDatePicker = true },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         )
         

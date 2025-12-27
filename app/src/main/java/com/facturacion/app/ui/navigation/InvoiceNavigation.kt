@@ -73,7 +73,10 @@ fun InvoiceNavigation(
                 InvoicePreviewScreen(
                     invoiceId = invoiceId,
                     invoiceRepository = invoiceRepository,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToEdit = { id ->
+                        navController.navigate(Screen.EditInvoice.createRoute(id))
+                    }
                 )
             }
         }
