@@ -1,0 +1,39 @@
+<resources>
+    <string name="app_name">Facturación</string>
+    <string name="add_invoice">Agregar Factura</string>
+    <string name="invoices">Facturas</string>
+    <string name="search">Buscar</string>
+    <string name="filter">Filtrar</string>
+    <string name="export">Exportar</string>
+    <string name="backup">Respaldo</string>
+    <string name="settings">Configuración</string>
+    <string name="date">Fecha</string>
+    <string name="establishment">Establecimiento</string>
+    <string name="total">Total</string>
+    <string name="tax">IVA</string>
+    <string name="subtotal">Subtotal</string>
+    <string name="category">Categoría</string>
+    <string name="edit">Editar</string>
+    <string name="delete">Eliminar</string>
+    <string name="save">Guardar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="camera">Cámara</string>
+    <string name="gallery">Galería</string>
+    <string name="pdf_file">Archivo PDF</string>
+    <string name="processing">Procesando…</string>
+    <string name="extracting_data">Extrayendo datos…</string>
+    <string name="invoice_saved">Factura guardada</string>
+    <string name="invoice_deleted">Factura eliminada</string>
+    <string name="export_success">Facturas exportadas exitosamente</string>
+    <string name="export_failed">Error al exportar facturas</string>
+    <string name="no_invoices">No hay facturas</string>
+    <string name="select_month">Seleccionar mes</string>
+    <string name="all_months">Todos los meses</string>
+    <string name="validation_error">Por favor complete todos los campos requeridos</string>
+    <string name="permission_camera">Se necesita permiso de cámara para tomar fotos</string>
+    <string name="permission_storage">Se necesita permiso de almacenamiento para acceder a archivos</string>
+</resources>
+
+
+
+
