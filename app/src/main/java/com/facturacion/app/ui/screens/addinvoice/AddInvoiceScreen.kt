@@ -53,7 +53,7 @@ fun AddInvoiceScreen(
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
     var extractedData by remember { mutableStateOf<com.facturacion.app.services.ocr.ExtractedInvoiceData?>(null) }
-    val ocrService = remember { OcrService() }
+    val ocrService = remember { OcrService(context) }
     val scope = rememberCoroutineScope()
     
     var tempFile by remember { mutableStateOf<File?>(null) }

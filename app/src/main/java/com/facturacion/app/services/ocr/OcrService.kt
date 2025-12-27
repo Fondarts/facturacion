@@ -1,15 +1,13 @@
 package com.facturacion.app.services.ocr
 
+import android.content.Context
 import android.graphics.Bitmap
-import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
-import kotlin.math.max
+import kotlin.math.abs
 
 data class ExtractedInvoiceData(
     val date: Date?,
@@ -22,26 +20,39 @@ data class ExtractedInvoiceData(
     val confidence: Float
 )
 
-class OcrService {
-    private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.Builder().build())
+class OcrService(private val context: Context) {
+    private var isInitialized = false
     
-    suspend fun extractTextFromBitmap(bitmap: Bitmap): String {
-        val image = InputImage.fromBitmap(bitmap, 0)
-        val task = textRecognizer.process(image)
-        val result = task.await()
-        return result.text
+    suspend fun ensureInitialized() {
+        if (!isInitialized) {
+            isInitialized = TesseractHelper.initialize(context)
+        }
     }
     
-    suspend fun extractInvoiceData(bitmap: Bitmap): ExtractedInvoiceData {
+    suspend fun extractTextFromBitmap(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
+        // Asegurar que Tesseract esté inicializado
+        ensureInitialized()
+        
+        if (!isInitialized) {
+            return@withContext ""
+        }
+        
+        return@withContext TesseractHelper.recognizeText(bitmap)
+    }
+    
+    suspend fun extractInvoiceData(bitmap: Bitmap): ExtractedInvoiceData = withContext(Dispatchers.IO) {
+        // Extraer texto usando Tesseract
         val rawText = extractTextFromBitmap(bitmap)
-        return parseInvoiceData(rawText)
+        
+        // Procesar el texto extraído
+        return@withContext parseInvoiceData(rawText)
     }
     
     private fun parseInvoiceData(text: String): ExtractedInvoiceData {
         val upperText = text.uppercase()
         
         // Extraer fecha
-        val date = extractDate(text, upperText)
+        val date = extractDate(text)
         
         // Extraer establecimiento (generalmente en las primeras líneas)
         val establishment = extractEstablishment(text)
@@ -147,7 +158,7 @@ class OcrService {
         )
     }
     
-    private fun extractDate(text: String, upperText: String): Date? {
+    private fun extractDate(text: String): Date? {
         // Patrones de fecha comunes en facturas (español y otros formatos)
         val datePatterns = listOf(
             Pattern.compile("(\\d{1,2})[/-](\\d{1,2})[/-](\\d{2,4})"), // DD/MM/YYYY o DD-MM-YYYY
@@ -319,7 +330,10 @@ class OcrService {
             for (pattern in patterns) {
                 val matcher = pattern.matcher(line)
                 if (matcher.find()) {
-                    return parseAmount(matcher.group(1))
+                    val group = matcher.group(1)
+                    if (group != null) {
+                        return parseAmount(group)
+                    }
                 }
             }
             return null
@@ -342,9 +356,12 @@ class OcrService {
                 for (pattern in totalPatterns) {
                     val matcher = pattern.matcher(line)
                     if (matcher.find()) {
-                        val value = parseAmount(matcher.group(1))
-                        if (value != null && value > 0 && result["total"] == null) {
-                            result["total"] = value
+                        val group = matcher.group(1)
+                        if (group != null) {
+                            val value = parseAmount(group)
+                            if (value != null && value > 0 && result["total"] == null) {
+                                result["total"] = value
+                            }
                         }
                     }
                 }
@@ -355,9 +372,12 @@ class OcrService {
                 val basePattern = Pattern.compile("BASE\\s+(?:IMPONIBLE|IMP)\\s*:?\\s*([\\d.,]+)", Pattern.CASE_INSENSITIVE)
                 val matcher = basePattern.matcher(line)
                 if (matcher.find()) {
-                    val value = parseAmount(matcher.group(1))
-                    if (value != null && value > 0 && result["subtotal"] == null) {
-                        result["subtotal"] = value
+                    val group = matcher.group(1)
+                    if (group != null) {
+                        val value = parseAmount(group)
+                        if (value != null && value > 0 && result["subtotal"] == null) {
+                            result["subtotal"] = value
+                        }
                     }
                 }
                 // También buscar valor en la misma línea sin etiqueta explícita
@@ -379,19 +399,21 @@ class OcrService {
                 for (pattern in ivaPatterns) {
                     val matcher = pattern.matcher(line)
                     if (matcher.find()) {
-                        if (matcher.groupCount() >= 2 && matcher.group(2) != null) {
+                        val group1 = matcher.group(1)
+                        val group2 = matcher.group(2)
+                        if (matcher.groupCount() >= 2 && group2 != null && group1 != null) {
                             // Formato con porcentaje y monto
-                            val rate = parseAmount(matcher.group(1))
-                            val taxValue = parseAmount(matcher.group(2))
+                            val rate = parseAmount(group1)
+                            val taxValue = parseAmount(group2)
                             if (rate != null && rate > 0 && rate <= 100 && result["taxRate"] == null) {
                                 result["taxRate"] = rate / 100.0
                             }
                             if (taxValue != null && taxValue > 0 && result["tax"] == null) {
                                 result["tax"] = taxValue
                             }
-                        } else {
+                        } else if (group1 != null) {
                             // Solo monto
-                            val taxValue = parseAmount(matcher.group(1))
+                            val taxValue = parseAmount(group1)
                             if (taxValue != null && taxValue > 0 && result["tax"] == null) {
                                 result["tax"] = taxValue
                             }
@@ -405,9 +427,12 @@ class OcrService {
                 val subtotalPattern = Pattern.compile("SUBTOTAL\\s*:?\\s*([\\d.,]+)\\s*€?", Pattern.CASE_INSENSITIVE)
                 val matcher = subtotalPattern.matcher(line)
                 if (matcher.find()) {
-                    val value = parseAmount(matcher.group(1))
-                    if (value != null && value > 0 && result["subtotal"] == null) {
-                        result["subtotal"] = value
+                    val group = matcher.group(1)
+                    if (group != null) {
+                        val value = parseAmount(group)
+                        if (value != null && value > 0 && result["subtotal"] == null) {
+                            result["subtotal"] = value
+                        }
                     }
                 }
             }
@@ -417,9 +442,12 @@ class OcrService {
                 val impPattern = Pattern.compile("IMPUESTO\\s*:?\\s*([\\d.,]+)\\s*€?", Pattern.CASE_INSENSITIVE)
                 val matcher = impPattern.matcher(line)
                 if (matcher.find()) {
-                    val value = parseAmount(matcher.group(1))
-                    if (value != null && value > 0 && result["tax"] == null) {
-                        result["tax"] = value
+                    val group = matcher.group(1)
+                    if (group != null) {
+                        val value = parseAmount(group)
+                        if (value != null && value > 0 && result["tax"] == null) {
+                            result["tax"] = value
+                        }
                     }
                 }
             }
@@ -434,9 +462,12 @@ class OcrService {
                 if (isPromotionalContext(line)) continue
                 val matcher = taxLinePattern.matcher(line)
                 if (matcher.find()) {
-                    val base = parseAmount(matcher.group(1))
-                    val rate = matcher.group(2).toDoubleOrNull()
-                    val tax = parseAmount(matcher.group(3))
+                    val group1 = matcher.group(1)
+                    val group2 = matcher.group(2)
+                    val group3 = matcher.group(3)
+                    val base = group1?.let { parseAmount(it) }
+                    val rate = group2?.toDoubleOrNull()
+                    val tax = group3?.let { parseAmount(it) }
                     
                     if (base != null && result["subtotal"] == null) result["subtotal"] = base
                     if (rate != null && result["taxRate"] == null) result["taxRate"] = rate / 100.0
@@ -789,7 +820,7 @@ class OcrService {
     }
     
     fun close() {
-        textRecognizer.close()
+        TesseractHelper.release()
     }
 }
 

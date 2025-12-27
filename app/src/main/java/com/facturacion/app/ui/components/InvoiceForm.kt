@@ -55,19 +55,19 @@ fun InvoiceForm(
     var total by remember { 
         mutableStateOf(
             if (initialInvoice != null) formatToTwoDecimals(initialInvoice.total)
-            else formatToTwoDecimals(extractedData?.total) ?: "0.00"
+            else formatToTwoDecimals(extractedData?.total)
         )
     }
     var subtotal by remember { 
         mutableStateOf(
             if (initialInvoice != null) formatToTwoDecimals(initialInvoice.subtotal)
-            else formatToTwoDecimals(extractedData?.subtotal) ?: "0.00"
+            else formatToTwoDecimals(extractedData?.subtotal)
         )
     }
     var tax by remember { 
         mutableStateOf(
             if (initialInvoice != null) formatToTwoDecimals(initialInvoice.tax)
-            else formatToTwoDecimals(extractedData?.tax) ?: "0.00"
+            else formatToTwoDecimals(extractedData?.tax)
         )
     }
     var taxRate by remember { 
@@ -80,7 +80,6 @@ fun InvoiceForm(
     var notes by remember { mutableStateOf(initialInvoice?.notes ?: "") }
     
     var showDatePicker by remember { mutableStateOf(false) }
-    var showCategoryPicker by remember { mutableStateOf(false) }
     
     Column(
         modifier = Modifier

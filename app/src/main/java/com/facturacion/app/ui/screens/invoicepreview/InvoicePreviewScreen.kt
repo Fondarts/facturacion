@@ -40,12 +40,6 @@ fun InvoicePreviewScreen(
     onNavigateToEdit: (Long) -> Unit
 ) {
     val context = LocalContext.current
-    val viewModel: InvoiceViewModel = viewModel(
-        factory = InvoiceViewModelFactory(
-            context.applicationContext as Application,
-            invoiceRepository
-        )
-    )
     
     var invoice by remember { mutableStateOf<com.facturacion.app.domain.models.Invoice?>(null) }
     var showFullScreenImage by remember { mutableStateOf(false) }
