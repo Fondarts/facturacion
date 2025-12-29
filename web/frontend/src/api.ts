@@ -14,6 +14,8 @@ import { db } from './firebase';
 import { Factura, Stats } from './types';
 
 const COLLECTION_NAME = 'facturas';
+const CLIENTES_COLLECTION = 'clientes';
+const EMISORES_COLLECTION = 'emisores';
 
 // Convertir documento de Firestore a Factura
 function docToFactura(docSnap: any): Factura {
@@ -132,4 +134,79 @@ export async function getStats(): Promise<Stats> {
     totalIva,
     porMes,
   };
+}
+
+// Clientes y Emisores
+export interface ClienteData {
+  id?: string;
+  nombre: string;
+  datos: string;
+  ultimo_uso?: Timestamp;
+}
+
+export interface EmisorData {
+  id?: string;
+  nombre: string;
+  datos: string;
+  ultimo_uso?: Timestamp;
+}
+
+export async function getClientes(): Promise<ClienteData[]> {
+  const q = query(collection(db, CLIENTES_COLLECTION), orderBy('ultimo_uso', 'desc'));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  } as ClienteData));
+}
+
+export async function getEmisores(): Promise<EmisorData[]> {
+  const q = query(collection(db, EMISORES_COLLECTION), orderBy('ultimo_uso', 'desc'));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  } as EmisorData));
+}
+
+export async function saveCliente(cliente: Omit<ClienteData, 'id'>): Promise<string> {
+  const docRef = await addDoc(collection(db, CLIENTES_COLLECTION), {
+    ...cliente,
+    ultimo_uso: Timestamp.now()
+  });
+  return docRef.id;
+}
+
+export async function saveEmisor(emisor: Omit<EmisorData, 'id'>): Promise<string> {
+  const docRef = await addDoc(collection(db, EMISORES_COLLECTION), {
+    ...emisor,
+    ultimo_uso: Timestamp.now()
+  });
+  return docRef.id;
+}
+
+export async function updateClienteUso(id: string): Promise<void> {
+  const docRef = doc(db, CLIENTES_COLLECTION, id);
+  await updateDoc(docRef, { ultimo_uso: Timestamp.now() });
+}
+
+export async function updateEmisorUso(id: string): Promise<void> {
+  const docRef = doc(db, EMISORES_COLLECTION, id);
+  await updateDoc(docRef, { ultimo_uso: Timestamp.now() });
+}
+
+export async function getUltimoCliente(): Promise<ClienteData | null> {
+  const q = query(collection(db, CLIENTES_COLLECTION), orderBy('ultimo_uso', 'desc'));
+  const querySnapshot = await getDocs(q);
+  if (querySnapshot.empty) return null;
+  const doc = querySnapshot.docs[0];
+  return { id: doc.id, ...doc.data() } as ClienteData;
+}
+
+export async function getUltimoEmisor(): Promise<EmisorData | null> {
+  const q = query(collection(db, EMISORES_COLLECTION), orderBy('ultimo_uso', 'desc'));
+  const querySnapshot = await getDocs(q);
+  if (querySnapshot.empty) return null;
+  const doc = querySnapshot.docs[0];
+  return { id: doc.id, ...doc.data() } as EmisorData;
 }

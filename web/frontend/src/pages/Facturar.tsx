@@ -1,54 +1,82 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, FileText, Download } from 'lucide-react';
-import { createFactura, getFacturas } from '../api';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, FileText, Download, User, Building2, ChevronDown } from 'lucide-react';
+import { createFactura, getClientes, getEmisores, getUltimoCliente, getUltimoEmisor, saveCliente, saveEmisor, updateClienteUso, updateEmisorUso, ClienteData, EmisorData } from '../api';
 import { FacturaItem } from '../types';
 import jsPDF from 'jspdf';
+
+type Moneda = 'EUR' | 'USD' | 'GBP';
+type FormatoFecha = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD-MM-YYYY';
 
 export default function Facturar() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [numeroFactura, setNumeroFactura] = useState<number>(1);
   const [loadingNumero, setLoadingNumero] = useState(true);
+  const [clientes, setClientes] = useState<ClienteData[]>([]);
+  const [emisores, setEmisores] = useState<EmisorData[]>([]);
+  const [showClienteDropdown, setShowClienteDropdown] = useState(false);
+  const [showEmisorDropdown, setShowEmisorDropdown] = useState(false);
   
   const [formData, setFormData] = useState({
+    from: '',
     cliente: '',
     fecha: new Date().toISOString().split('T')[0],
     concepto: '',
     tasa_iva: 21,
+    moneda: 'EUR' as Moneda,
+    formatoFecha: 'DD/MM/YYYY' as FormatoFecha,
   });
   
   const [items, setItems] = useState<FacturaItem[]>([
     { descripcion: '', cantidad: 1, precio_unitario: 0 }
   ]);
 
-  // Obtener el siguiente número de factura
+  // Cargar datos iniciales
   useEffect(() => {
-    async function loadNextNumber() {
+    async function loadInitialData() {
       try {
-        const facturas = await getFacturas();
-        // Filtrar solo facturas generadas
-        const generadas = facturas.filter(f => f.tipo === 'generada');
-        
-        // Extraer números de factura de los conceptos o usar el índice
+        // Cargar número de factura
+        const { getFacturas } = await import('../api');
+        const facturasList = await getFacturas();
+        const generadas = facturasList.filter(f => f.tipo === 'generada');
         let maxNumero = 0;
         generadas.forEach(f => {
-          // Intentar extraer número del concepto si tiene formato "FAC-001" o similar
           const match = f.concepto?.match(/FAC[-\s]?(\d+)/i) || f.concepto?.match(/#(\d+)/i);
           if (match) {
             const num = parseInt(match[1]);
             if (num > maxNumero) maxNumero = num;
           }
         });
-        
         setNumeroFactura(maxNumero + 1);
+
+        // Cargar clientes y emisores
+        const [clientesList, emisoresList] = await Promise.all([
+          getClientes(),
+          getEmisores()
+        ]);
+        setClientes(clientesList);
+        setEmisores(emisoresList);
+
+        // Cargar últimos usados
+        const [ultimoCliente, ultimoEmisor] = await Promise.all([
+          getUltimoCliente(),
+          getUltimoEmisor()
+        ]);
+
+        if (ultimoCliente) {
+          setFormData(prev => ({ ...prev, cliente: ultimoCliente.datos }));
+        }
+        if (ultimoEmisor) {
+          setFormData(prev => ({ ...prev, from: ultimoEmisor.datos }));
+        }
       } catch (error) {
-        console.error('Error loading facturas:', error);
+        console.error('Error loading initial data:', error);
       } finally {
         setLoadingNumero(false);
       }
     }
-    loadNextNumber();
+    loadInitialData();
   }, []);
 
   // Calcular totales
@@ -71,10 +99,82 @@ export default function Facturar() {
     setItems(newItems);
   }
 
+  async function selectCliente(cliente: ClienteData) {
+    setFormData(prev => ({ ...prev, cliente: cliente.datos }));
+    setShowClienteDropdown(false);
+    if (cliente.id) {
+      await updateClienteUso(cliente.id);
+    }
+  }
+
+  async function selectEmisor(emisor: EmisorData) {
+    setFormData(prev => ({ ...prev, from: emisor.datos }));
+    setShowEmisorDropdown(false);
+    if (emisor.id) {
+      await updateEmisorUso(emisor.id);
+    }
+  }
+
+  async function saveCurrentCliente() {
+    if (!formData.cliente.trim()) return;
+    const nombre = formData.cliente.split('\n')[0] || 'Cliente';
+    await saveCliente({ nombre, datos: formData.cliente });
+    const updated = await getClientes();
+    setClientes(updated);
+  }
+
+  async function saveCurrentEmisor() {
+    if (!formData.from.trim()) return;
+    const nombre = formData.from.split('\n')[0] || 'Emisor';
+    await saveEmisor({ nombre, datos: formData.from });
+    const updated = await getEmisores();
+    setEmisores(updated);
+  }
+
+  function formatDate(date: string): string {
+    const d = new Date(date + 'T00:00:00');
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const year = d.getFullYear();
+
+    switch (formData.formatoFecha) {
+      case 'DD/MM/YYYY':
+        return `${day}/${month}/${year}`;
+      case 'MM/DD/YYYY':
+        return `${month}/${day}/${year}`;
+      case 'YYYY-MM-DD':
+        return `${year}-${month}-${day}`;
+      case 'DD-MM-YYYY':
+        return `${day}-${month}-${year}`;
+      default:
+        return `${day}/${month}/${year}`;
+    }
+  }
+
+  function formatCurrency(value: number): string {
+    const currencyMap: Record<Moneda, string> = {
+      EUR: 'EUR',
+      USD: 'USD',
+      GBP: 'GBP'
+    };
+    return new Intl.NumberFormat('es-ES', { 
+      style: 'currency', 
+      currency: formData.moneda 
+    }).format(value);
+  }
+
+  function getCurrencySymbol(): string {
+    const symbols: Record<Moneda, string> = {
+      EUR: '€',
+      USD: '$',
+      GBP: '£'
+    };
+    return symbols[formData.moneda];
+  }
+
   function exportToPDF() {
     const doc = new jsPDF();
     
-    // Configuración
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
     let yPos = margin;
@@ -92,24 +192,30 @@ export default function Facturar() {
     yPos += 10;
 
     // Fecha
-    const fechaFormateada = new Date(formData.fecha).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-    doc.text(`FECHA: ${fechaFormateada}`, margin, yPos);
+    doc.text(`FECHA: ${formatDate(formData.fecha)}`, margin, yPos);
     yPos += 15;
+
+    // From (Emisor)
+    if (formData.from) {
+      doc.setFont('helvetica', 'bold');
+      doc.text('DE:', margin, yPos);
+      yPos += 7;
+      doc.setFont('helvetica', 'normal');
+      const fromLines = doc.splitTextToSize(formData.from, pageWidth - 2 * margin);
+      doc.text(fromLines, margin, yPos);
+      yPos += fromLines.length * 7 + 10;
+    }
 
     // Cliente
     doc.setFont('helvetica', 'bold');
-    doc.text('CLIENTE:', margin, yPos);
+    doc.text('PARA:', margin, yPos);
     yPos += 7;
     doc.setFont('helvetica', 'normal');
     const clienteLines = doc.splitTextToSize(formData.cliente || 'Sin especificar', pageWidth - 2 * margin);
     doc.text(clienteLines, margin, yPos);
     yPos += clienteLines.length * 7 + 10;
 
-    // Concepto (si existe)
+    // Concepto
     if (formData.concepto) {
       doc.setFont('helvetica', 'bold');
       doc.text('CONCEPTO:', margin, yPos);
@@ -125,18 +231,15 @@ export default function Facturar() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     
-    // Headers
     doc.text('DESCRIPCIÓN', margin, yPos);
     doc.text('CANT.', margin + 100, yPos);
     doc.text('PRECIO', margin + 120, yPos);
     doc.text('TOTAL', margin + 160, yPos, { align: 'right' });
     yPos += 7;
     
-    // Línea
     doc.line(margin, yPos, pageWidth - margin, yPos);
     yPos += 5;
 
-    // Items
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     items.forEach((item) => {
@@ -176,7 +279,6 @@ export default function Facturar() {
     doc.text(`TOTAL:`, margin + 100, yPos, { align: 'right' });
     doc.text(formatCurrency(total), margin + 160, yPos, { align: 'right' });
 
-    // Guardar PDF
     doc.save(`FACTURA-${numeroFactura.toString().padStart(4, '0')}.pdf`);
   }
 
@@ -185,8 +287,16 @@ export default function Facturar() {
     setSaving(true);
 
     try {
+      // Guardar cliente y emisor actuales si tienen datos
+      if (formData.cliente.trim()) {
+        await saveCurrentCliente();
+      }
+      if (formData.from.trim()) {
+        await saveCurrentEmisor();
+      }
+
       const data = new FormData();
-      data.append('establecimiento', formData.cliente.split('\n')[0] || formData.cliente); // Primera línea como establecimiento
+      data.append('establecimiento', formData.cliente.split('\n')[0] || formData.cliente);
       data.append('fecha', formData.fecha);
       data.append('concepto', `FAC-${numeroFactura.toString().padStart(4, '0')} - ${formData.concepto || 'Factura generada'}`);
       data.append('subtotal', subtotal.toString());
@@ -204,10 +314,6 @@ export default function Facturar() {
       setSaving(false);
     }
   }
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
-  };
 
   if (loadingNumero) {
     return (
@@ -235,43 +341,63 @@ export default function Facturar() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Datos principales */}
+        {/* Configuración */}
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             <FileText size={20} className="text-amber-400" />
-            Datos de la Factura
+            Configuración
           </h2>
           
-          {/* Número de factura */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Número de Factura
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="1"
-                value={numeroFactura}
-                onChange={(e) => setNumeroFactura(parseInt(e.target.value) || 1)}
-                className="w-32 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-              />
-              <span className="text-slate-400">FAC-{numeroFactura.toString().padStart(4, '0')}</span>
+          <div className="grid grid-cols-3 gap-4">
+            {/* Número de factura */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Número de Factura
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  value={numeroFactura}
+                  onChange={(e) => setNumeroFactura(parseInt(e.target.value) || 1)}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                />
+              </div>
+              <span className="text-xs text-slate-400 mt-1 block">FAC-{numeroFactura.toString().padStart(4, '0')}</span>
             </div>
-          </div>
 
-          {/* Cliente (textarea grande) */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Cliente
-            </label>
-            <textarea
-              value={formData.cliente}
-              onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
-              placeholder="Nombre del cliente&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: cliente@ejemplo.com&#10;Teléfono: 123 456 789"
-              required
-              rows={6}
-            />
+            {/* Moneda */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Moneda
+              </label>
+              <select
+                value={formData.moneda}
+                onChange={(e) => setFormData({ ...formData, moneda: e.target.value as Moneda })}
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              >
+                <option value="EUR">EUR (€)</option>
+                <option value="USD">USD ($)</option>
+                <option value="GBP">GBP (£)</option>
+              </select>
+            </div>
+
+            {/* Formato de fecha */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Formato Fecha
+              </label>
+              <select
+                value={formData.formatoFecha}
+                onChange={(e) => setFormData({ ...formData, formatoFecha: e.target.value as FormatoFecha })}
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              >
+                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+              </select>
+            </div>
           </div>
 
           {/* Fecha */}
@@ -286,21 +412,135 @@ export default function Facturar() {
               className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               required
             />
+            <span className="text-xs text-slate-400 mt-1 block">Vista previa: {formatDate(formData.fecha)}</span>
           </div>
+        </div>
 
-          {/* Concepto */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Concepto
-            </label>
-            <input
-              type="text"
-              value={formData.concepto}
-              onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-              placeholder="Descripción general de la factura"
-            />
+        {/* From (Emisor) */}
+        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Building2 size={20} className="text-amber-400" />
+              From (Emisor)
+            </h2>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEmisorDropdown(!showEmisorDropdown)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
+              >
+                <User size={16} />
+                Elegir
+                <ChevronDown size={16} />
+              </button>
+              {showEmisorDropdown && (
+                <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
+                  {emisores.length === 0 ? (
+                    <div className="p-4 text-slate-400 text-sm">No hay emisores guardados</div>
+                  ) : (
+                    emisores.map((emisor) => (
+                      <button
+                        key={emisor.id}
+                        type="button"
+                        onClick={() => selectEmisor(emisor)}
+                        className="w-full text-left p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0"
+                      >
+                        <div className="font-medium text-white">{emisor.nombre}</div>
+                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{emisor.datos}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+          
+          <textarea
+            value={formData.from}
+            onChange={(e) => setFormData({ ...formData, from: e.target.value })}
+            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
+            placeholder="Tu nombre o empresa&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: tu@email.com&#10;Teléfono: 123 456 789&#10;CIF/NIF: 12345678A"
+            rows={6}
+          />
+          <button
+            type="button"
+            onClick={saveCurrentEmisor}
+            disabled={!formData.from.trim()}
+            className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Guardar este emisor
+          </button>
+        </div>
+
+        {/* Cliente */}
+        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <User size={20} className="text-amber-400" />
+              Cliente
+            </h2>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowClienteDropdown(!showClienteDropdown)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
+              >
+                <User size={16} />
+                Elegir
+                <ChevronDown size={16} />
+              </button>
+              {showClienteDropdown && (
+                <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
+                  {clientes.length === 0 ? (
+                    <div className="p-4 text-slate-400 text-sm">No hay clientes guardados</div>
+                  ) : (
+                    clientes.map((cliente) => (
+                      <button
+                        key={cliente.id}
+                        type="button"
+                        onClick={() => selectCliente(cliente)}
+                        className="w-full text-left p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0"
+                      >
+                        <div className="font-medium text-white">{cliente.nombre}</div>
+                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{cliente.datos}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <textarea
+            value={formData.cliente}
+            onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
+            placeholder="Nombre del cliente&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: cliente@ejemplo.com&#10;Teléfono: 123 456 789"
+            required
+            rows={6}
+          />
+          <button
+            type="button"
+            onClick={saveCurrentCliente}
+            disabled={!formData.cliente.trim()}
+            className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Guardar este cliente
+          </button>
+        </div>
+
+        {/* Concepto */}
+        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Concepto
+          </label>
+          <input
+            type="text"
+            value={formData.concepto}
+            onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
+            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            placeholder="Descripción general de la factura"
+          />
         </div>
 
         {/* Items */}
@@ -318,7 +558,6 @@ export default function Facturar() {
           </div>
 
           <div className="space-y-3">
-            {/* Header */}
             <div className="grid grid-cols-12 gap-3 text-sm text-slate-400 px-1">
               <div className="col-span-6">Descripción</div>
               <div className="col-span-2 text-center">Cantidad</div>
@@ -327,7 +566,6 @@ export default function Facturar() {
               <div className="col-span-1"></div>
             </div>
 
-            {/* Items */}
             {items.map((item, index) => (
               <div key={index} className="grid grid-cols-12 gap-3 items-center">
                 <div className="col-span-6">
@@ -450,4 +688,3 @@ export default function Facturar() {
     </div>
   );
 }
-
