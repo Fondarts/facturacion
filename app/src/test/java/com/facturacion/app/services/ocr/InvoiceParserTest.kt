@@ -661,5 +661,74 @@ Página 1 de 1
         assertEquals("IVA incorrecto", 6.36, result.tax ?: 0.0, 0.01)
         assertEquals("Tasa IVA incorrecta", 0.10, result.taxRate ?: 0.0, 0.01)
     }
+
+    @Test
+    fun testIchiRamenReceipt() {
+        // Texto OCR donde el nombre del cliente aparece antes que el establecimiento
+        // El establecimiento contiene palabra clave "RAMEN"
+        val text = """
+CALLE DE MELCHOR FERNANDEZ ALMAGRO 37
+28029 (MADRID)
+DATOS CLIENTE:
+FEDERICO ONDARTS
+CALLE MELCHOR FERNANDEZ
+ALMAGRO,10
+Cant.
+28029 MADRID
+NIF. ZO641643V
+1
+ICHI RAMEN
+1
+TEL:915287098 NIF:X8787298X
+1
+1
+Base
+IVA INCLUIDO
+51,68
+terraza-barra: 24
+Articulo
+VEGETARIANO RAMEN
+SHOYU RAMEN
+BANDEJA 4 (18PIEZAS)
+AGUA 0.5L
+TINTO DE LA CASA
+FACTURA SIMPLIFICADA
+NOO0007300 SÁBAD0 27/09/2025 21:00:44
+IVA, Cuota
+10,00% 5,17
+Impo.
+GRACIAS POR SU VISITA
+10,95
+12,95
+21,45
+2,00
+Total 56,85 €
+9,50
+        """.trimIndent()
+
+        val result = InvoiceParser.parse(text)
+
+        println("\n=== Ichi Ramen ===")
+        println("Establecimiento: ${result.establishment}")
+        println("Fecha: ${result.date}")
+        println("Total: ${result.total}")
+        println("Subtotal: ${result.subtotal}")
+        println("IVA: ${result.tax}")
+        println("Tasa IVA: ${result.taxRate?.times(100)}%")
+        println("Confianza: ${result.confidence}")
+
+        assertNotNull("Establecimiento no detectado", result.establishment)
+        assertEquals("Establecimiento incorrecto", "ICHI RAMEN", result.establishment)
+        assertNotNull("Fecha no detectada", result.date)
+        
+        // Valores esperados:
+        // Total: 56,85
+        // Base (Subtotal): 51,68
+        // IVA: 5,17
+        // Tasa: 10%
+        assertEquals("Total incorrecto", 56.85, result.total ?: 0.0, 0.01)
+        assertEquals("Subtotal incorrecto", 51.68, result.subtotal ?: 0.0, 0.01)
+        assertEquals("IVA incorrecto", 5.17, result.tax ?: 0.0, 0.01)
+    }
 }
 

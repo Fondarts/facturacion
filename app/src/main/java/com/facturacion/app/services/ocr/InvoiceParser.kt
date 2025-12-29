@@ -124,6 +124,38 @@ object InvoiceParser {
             "\\bS\\.?A\\.?U\\.?\\b"  // S.A.U.
         )
         
+        // Palabras clave que indican tipo de negocio (muy probable que sea el establecimiento)
+        val businessKeywords = listOf(
+            "RAMEN", "RESTAURANTE", "BAR", "CAFE", "CAFETERIA", "PIZZERIA", 
+            "BURGER", "SUSHI", "TAPAS", "TABERNA", "CERVECERIA", "ASADOR",
+            "PARRILLA", "MARISQUERIA", "BOCATERIA", "KEBAB", "WOK", "GRILL"
+        )
+        
+        // Detectar líneas que son datos del cliente (para excluirlas)
+        val clientDataStartIndex = lines.indexOfFirst { 
+            it.uppercase().contains("DATOS CLIENTE") || 
+            it.uppercase().trim() == "CLIENTE:" ||
+            it.uppercase().trim() == "CLIENTE"
+        }
+        
+        // Pasada 0: Buscar líneas con palabras clave de negocio (más confiable)
+        for (i in lines.indices) {
+            val line = lines[i]
+            val upperLine = line.uppercase()
+            
+            if (line.length < 3 || line.length > 50) continue
+            if (line.lowercase().contains(".pdf")) continue
+            
+            // Si encontramos una palabra clave de negocio, es muy probable que sea el establecimiento
+            if (businessKeywords.any { upperLine.contains(it) }) {
+                // Verificar que no sea un item del menú (generalmente tienen precio o cantidad)
+                if (!upperLine.matches(Regex("^\\d+\\s+.*")) && !upperLine.contains("€")) {
+                    log("Establecimiento encontrado por palabra clave de negocio: $line")
+                    return line
+                }
+            }
+        }
+        
         // Primera pasada: buscar líneas con indicadores de empresa (más confiable)
         for (i in 0 until minOf(15, lines.size)) {
             val line = lines[i]
@@ -133,6 +165,9 @@ object InvoiceParser {
             
             // Saltar nombres de archivo PDF
             if (line.lowercase().contains(".pdf")) continue
+            
+            // Saltar si está en la sección de datos del cliente
+            if (clientDataStartIndex != -1 && i > clientDataStartIndex && i < clientDataStartIndex + 5) continue
             
             val hasCompanyIndicator = companyIndicators.any { 
                 upperLine.contains(Regex(it, RegexOption.IGNORE_CASE)) 
@@ -156,6 +191,9 @@ object InvoiceParser {
             
             // Saltar líneas que contienen ".pdf" (nombres de archivo)
             if (line.lowercase().contains(".pdf")) continue
+            
+            // Saltar si está en la sección de datos del cliente (después de "DATOS CLIENTE:")
+            if (clientDataStartIndex != -1 && i > clientDataStartIndex && i < clientDataStartIndex + 5) continue
             
             // Saltar palabras exactas que son etiquetas genéricas
             if (exactExcludedWords.any { upperLine == it }) continue
