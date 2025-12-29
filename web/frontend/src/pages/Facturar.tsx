@@ -416,7 +416,9 @@ export default function Facturar() {
       }
 
       const data = new FormData();
+      // Guardar solo la primera línea como establecimiento para búsqueda, pero guardar el cliente completo
       data.append('establecimiento', formData.cliente.split('\n')[0] || formData.cliente);
+      data.append('cliente', formData.cliente); // Guardar cliente completo
       data.append('fecha', formData.fecha);
       data.append('concepto', numeroFactura ? `Factura ${numeroFactura}` : 'Factura generada');
       data.append('subtotal', subtotal.toString());

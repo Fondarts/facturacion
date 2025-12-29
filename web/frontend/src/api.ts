@@ -11,7 +11,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Factura, Stats } from './types';
+import { Factura, FacturaItem, Stats } from './types';
 
 const COLLECTION_NAME = 'facturas';
 const CLIENTES_COLLECTION = 'clientes';
@@ -45,6 +45,7 @@ function docToFactura(docSnap: any): Factura {
     fileName: data.fileName || '',
     tipo: data.tipo || 'recibida',
     items: items,
+    cliente: data.cliente, // Cliente completo
     from: data.from,
     moneda: data.moneda,
     formatoFecha: data.formatoFecha,
@@ -99,6 +100,9 @@ export async function createFactura(data: FormData): Promise<Factura> {
   };
 
   // Agregar campos adicionales para facturas generadas
+  if (data.get('cliente')) {
+    facturaData.cliente = data.get('cliente') as string; // Guardar cliente completo
+  }
   if (data.get('from')) {
     facturaData.from = data.get('from') as string;
   }

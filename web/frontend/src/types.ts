@@ -14,6 +14,12 @@ export interface Factura {
   created_at: string;
   updated_at: string;
   items?: FacturaItem[];
+  cliente?: string; // Cliente completo (para facturas generadas)
+  from?: string; // Emisor (para facturas generadas)
+  moneda?: string; // Moneda (EUR, USD, GBP)
+  formatoFecha?: string; // Formato de fecha (DD/MM/YYYY, etc.)
+  idioma?: string; // Idioma (es, en)
+  numeroFactura?: string; // Número de factura personalizado
 }
 
 export interface FacturaItem {
