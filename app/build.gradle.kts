@@ -99,8 +99,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     
-    // Tesseract OCR (reemplaza ML Kit)
-    implementation("com.rmtheis:tess-two:9.1.0")
+    // ML Kit OCR (Text Recognition)
+    implementation("com.google.mlkit:text-recognition:16.0.0")
     
     // ExifInterface for image rotation
     implementation("androidx.exifinterface:exifinterface:1.3.7")

@@ -1,9 +1,12 @@
 package com.facturacion.app.ui.screens.addinvoice
 
 import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import java.text.SimpleDateFormat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.facturacion.app.data.repositories.CategoryRepository
 import com.facturacion.app.data.repositories.InvoiceRepository
@@ -157,36 +161,59 @@ fun AddInvoiceScreen(
                     savedFileName = fileName
                     savedFileType = fileType
                     
-                    // Procesar con OCR
-                    val bitmap = if (fileType == "pdf") {
-                        PdfProcessor.extractFirstPageAsBitmap(savedFile.absolutePath)
+                    // Procesar archivo
+                    if (fileType == "pdf") {
+                        // Para PDFs: primero intentar extracción directa de texto
+                        PdfProcessor.initialize(context)
+                        val directText = PdfProcessor.extractTextFromPdf(savedFile.absolutePath)
+                        
+                        if (directText != null && directText.length > 50) {
+                            // PDF tiene texto extraíble, usar parser directamente
+                            val parsed = com.facturacion.app.services.ocr.InvoiceParser.parse(directText)
+                            rawOcrText = directText
+                            extractedData = com.facturacion.app.services.ocr.ExtractedInvoiceData(
+                                date = parsed.date ?: Date(),
+                                establishment = parsed.establishment ?: "",
+                                total = parsed.total ?: 0.0,
+                                subtotal = parsed.subtotal ?: 0.0,
+                                tax = parsed.tax ?: 0.0,
+                                taxRate = parsed.taxRate ?: 0.10,
+                                rawText = directText,
+                                confidence = parsed.confidence
+                            )
+                        } else {
+                            // PDF es imagen escaneada, usar OCR
+                            val bitmap = PdfProcessor.extractFirstPageAsBitmap(savedFile.absolutePath)
+                            if (bitmap != null) {
+                                val data = ocrService.extractInvoiceData(bitmap)
+                                rawOcrText = data.rawText
+                                extractedData = data.copy(
+                                    date = data.date ?: Date(),
+                                    establishment = data.establishment ?: "",
+                                    total = data.total ?: 0.0,
+                                    subtotal = data.subtotal ?: 0.0,
+                                    tax = data.tax ?: 0.0
+                                )
+                            } else {
+                                extractedData = createEmptyData()
+                            }
+                        }
                     } else {
-                        ImageProcessor.loadBitmap(savedFile.absolutePath)
-                    }
-                    
-                    if (bitmap != null) {
-                        val data = ocrService.extractInvoiceData(bitmap)
-                        // Guardar texto raw para debug
-                        rawOcrText = data.rawText
-                        extractedData = data.copy(
-                            date = data.date ?: Date(),
-                            establishment = data.establishment ?: "",
-                            total = data.total ?: 0.0,
-                            subtotal = data.subtotal ?: 0.0,
-                            tax = data.tax ?: 0.0
-                        )
-                    } else {
-                        // Si no se pudo procesar, crear datos vacíos
-                        extractedData = com.facturacion.app.services.ocr.ExtractedInvoiceData(
-                            date = Date(),
-                            establishment = "",
-                            total = 0.0,
-                            subtotal = 0.0,
-                            tax = 0.0,
-                            taxRate = 0.16,
-                            rawText = "",
-                            confidence = 0f
-                        )
+                        // Para imágenes: usar OCR
+                        val bitmap = ImageProcessor.loadBitmap(savedFile.absolutePath)
+                        if (bitmap != null) {
+                            val data = ocrService.extractInvoiceData(bitmap)
+                            rawOcrText = data.rawText
+                            extractedData = data.copy(
+                                date = data.date ?: Date(),
+                                establishment = data.establishment ?: "",
+                                total = data.total ?: 0.0,
+                                subtotal = data.subtotal ?: 0.0,
+                                tax = data.tax ?: 0.0
+                            )
+                        } else {
+                            extractedData = createEmptyData()
+                        }
                     }
                     
                     isProcessing = false
@@ -198,6 +225,8 @@ fun AddInvoiceScreen(
         }
     }
     
+    val snackbarHostState = remember { SnackbarHostState() }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -208,6 +237,9 @@ fun AddInvoiceScreen(
                     }
                 }
             )
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
         }
     ) { padding ->
         Column(
@@ -288,8 +320,42 @@ fun AddInvoiceScreen(
             
             // Debug: Botón para mostrar/ocultar texto OCR
             if (extractedData != null && rawOcrText != null) {
+                val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+                
+                // Función para formatear y copiar datos al portapapeles
+                fun copyDebugDataToClipboard() {
+                    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                    val data = extractedData!!
+                    
+                    val debugText = buildString {
+                        appendLine("=== DEBUG OCR ===")
+                        appendLine()
+                        appendLine("VALORES EXTRAÍDOS:")
+                        appendLine("Establecimiento: ${data.establishment ?: "N/A"}")
+                        appendLine("Fecha: ${data.date?.let { dateFormat.format(it) } ?: "N/A"}")
+                        appendLine("Total: ${data.total ?: "N/A"}")
+                        appendLine("Subtotal: ${data.subtotal ?: "N/A"}")
+                        appendLine("IVA: ${data.tax ?: "N/A"}")
+                        appendLine("Tasa IVA: ${data.taxRate ?: "N/A"}")
+                        appendLine("Confianza: ${((data.confidence ?: 0f) * 100).toInt()}%")
+                        appendLine()
+                        appendLine("=== TEXTO EXTRAÍDO POR OCR ===")
+                        appendLine(rawOcrText ?: "")
+                    }
+                    
+                    val clip = ClipData.newPlainText("Debug OCR", debugText)
+                    clipboardManager.setPrimaryClip(clip)
+                    
+                    // Mostrar snackbar de confirmación
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Datos copiados al portapapeles")
+                    }
+                }
+                
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { copyDebugDataToClipboard() },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -303,7 +369,7 @@ fun AddInvoiceScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "Debug OCR",
+                                "Debug OCR (Click para copiar)",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -379,20 +445,23 @@ fun AddInvoiceScreen(
             }
             
             if (extractedData != null && savedFilePath != null && savedFileName != null && savedFileType != null) {
-                InvoiceForm(
-                    initialInvoice = null,
-                    extractedData = extractedData,
-                    filePath = savedFilePath!!,
-                    fileName = savedFileName!!,
-                    fileType = savedFileType!!,
-                    categoryRepository = categoryRepository,
-                    onSave = { invoice ->
-                        pendingInvoice = invoice
-                        viewModel.insertInvoice(invoice)
-                        // No navegar inmediatamente, esperar el resultado del estado
-                    },
-                    onCancel = onNavigateBack
-                )
+                // key() fuerza recreación del formulario cuando cambia el archivo
+                key(savedFilePath) {
+                    InvoiceForm(
+                        initialInvoice = null,
+                        extractedData = extractedData,
+                        filePath = savedFilePath!!,
+                        fileName = savedFileName!!,
+                        fileType = savedFileType!!,
+                        categoryRepository = categoryRepository,
+                        onSave = { invoice ->
+                            pendingInvoice = invoice
+                            viewModel.insertInvoice(invoice)
+                            // No navegar inmediatamente, esperar el resultado del estado
+                        },
+                        onCancel = onNavigateBack
+                    )
+                }
             }
             }
         }
@@ -456,10 +525,21 @@ fun AddInvoiceScreen(
     
     DisposableEffect(Unit) {
         onDispose {
-            ocrService.close()
+            ocrService.release()
         }
     }
 }
+
+private fun createEmptyData() = com.facturacion.app.services.ocr.ExtractedInvoiceData(
+    date = java.util.Date(),
+    establishment = "",
+    total = 0.0,
+    subtotal = 0.0,
+    tax = 0.0,
+    taxRate = 0.10,
+    rawText = "",
+    confidence = 0f
+)
 
 fun getFileName(context: android.content.Context, uri: Uri): String? {
     var result: String? = null
