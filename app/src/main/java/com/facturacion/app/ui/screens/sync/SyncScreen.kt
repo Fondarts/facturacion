@@ -35,7 +35,7 @@ fun SyncScreen(
     val firebaseService = remember {
         val database = AppDatabase.getDatabase(context)
         val repository = InvoiceRepository(database.invoiceDao())
-        FirebaseService(repository)
+        FirebaseService(context, repository)
     }
     
     var syncStatus by remember { mutableStateOf<SyncStatus>(SyncStatus.Idle) }

@@ -28,6 +28,8 @@ function docToFactura(docSnap: any): Factura {
     tasa_iva: data.tasa_iva || 0.1,
     concepto: data.concepto,
     archivo: data.archivo,
+    fileUrl: data.fileUrl || '',
+    fileName: data.fileName || '',
     tipo: data.tipo || 'recibida',
     created_at: data.created_at instanceof Timestamp ? data.created_at.toDate().toISOString() : data.created_at,
     updated_at: data.updated_at instanceof Timestamp ? data.updated_at.toDate().toISOString() : data.updated_at,

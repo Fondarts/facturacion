@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { getFactura, updateFactura } from '../api';
 import { Factura } from '../types';
+import FileViewer from '../components/FileViewer';
 
 export default function FacturaEdit() {
   const { id } = useParams<{ id: string }>();
@@ -132,6 +133,16 @@ export default function FacturaEdit() {
               placeholder="Descripción o concepto"
             />
           </div>
+
+          {/* Archivo */}
+          {factura.fileUrl && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Archivo de Factura
+              </label>
+              <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} />
+            </div>
+          )}
 
           {/* Valores monetarios */}
           <div className="grid grid-cols-2 gap-4">

@@ -1,56 +1,98 @@
 package com.facturacion.app.services.sync
 
+import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.facturacion.app.data.repositories.InvoiceRepository
 import com.facturacion.app.domain.models.Invoice
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.ktx.storage
 import kotlinx.coroutines.tasks.await
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class FirebaseService(
+    private val context: Context,
     private val invoiceRepository: InvoiceRepository
 ) {
     private val db: FirebaseFirestore = Firebase.firestore
+    private val storage: FirebaseStorage = Firebase.storage
     private val collectionName = "facturas"
+    private val storageFolder = "facturas"
 
     companion object {
         private const val TAG = "FirebaseService"
     }
 
     /**
-     * Sube todas las facturas locales a Firebase
+     * Sube un archivo a Firebase Storage y retorna su URL
+     */
+    private suspend fun uploadFileToStorage(filePath: String, fileName: String): String? {
+        return try {
+            val file = File(filePath)
+            if (!file.exists()) {
+                Log.w(TAG, "Archivo no existe: $filePath")
+                return null
+            }
+
+            val storageRef = storage.reference.child("$storageFolder/$fileName")
+            val uploadTask = storageRef.putFile(Uri.fromFile(file)).await()
+            val downloadUrl = uploadTask.storage.downloadUrl.await()
+            
+            Log.d(TAG, "Archivo subido: $fileName -> $downloadUrl")
+            downloadUrl.toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al subir archivo: $fileName", e)
+            null
+        }
+    }
+
+    /**
+     * Sube todas las facturas locales a Firebase (datos + archivos)
      */
     suspend fun uploadAllInvoices(): Result<String> {
         return try {
             val localInvoices = invoiceRepository.getAllInvoicesOnce()
             var uploadedCount = 0
             var skippedCount = 0
+            var filesUploaded = 0
 
             for (invoice in localInvoices) {
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val fechaStr = dateFormat.format(invoice.date)
+                
                 // Verificar si ya existe en Firebase (por establecimiento + fecha)
                 val existingDocs = db.collection(collectionName)
                     .whereEqualTo("establecimiento", invoice.establishment)
-                    .whereEqualTo("fecha", invoice.date)
+                    .whereEqualTo("fecha", fechaStr)
                     .get()
                     .await()
 
                 if (existingDocs.isEmpty) {
-                    // Crear nuevo documento
-                    val docData = invoiceToFirebaseMap(invoice)
+                    // Subir archivo si existe
+                    var fileUrl: String? = null
+                    if (invoice.filePath.isNotEmpty() && File(invoice.filePath).exists()) {
+                        fileUrl = uploadFileToStorage(invoice.filePath, invoice.fileName)
+                        if (fileUrl != null) filesUploaded++
+                    }
+
+                    // Crear nuevo documento con URL del archivo
+                    val docData = invoiceToFirebaseMap(invoice, fechaStr, fileUrl)
                     db.collection(collectionName).add(docData).await()
                     uploadedCount++
-                    Log.d(TAG, "Subida: ${invoice.establishment} - ${invoice.date}")
+                    Log.d(TAG, "Subida: ${invoice.establishment} - $fechaStr")
                 } else {
                     skippedCount++
-                    Log.d(TAG, "Ya existe: ${invoice.establishment} - ${invoice.date}")
+                    Log.d(TAG, "Ya existe: ${invoice.establishment} - $fechaStr")
                 }
             }
 
-            Result.success("Sincronización completada: $uploadedCount subidas, $skippedCount ya existían")
+            Result.success("Sincronización completada: $uploadedCount subidas ($filesUploaded archivos), $skippedCount ya existían")
         } catch (e: Exception) {
             Log.e(TAG, "Error al subir facturas", e)
             Result.failure(e)
@@ -121,11 +163,10 @@ class FirebaseService(
         }
     }
 
-    private fun invoiceToFirebaseMap(invoice: Invoice): Map<String, Any?> {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private fun invoiceToFirebaseMap(invoice: Invoice, fechaStr: String, fileUrl: String?): Map<String, Any?> {
         return mapOf(
             "establecimiento" to invoice.establishment,
-            "fecha" to dateFormat.format(invoice.date),
+            "fecha" to fechaStr,
             "total" to invoice.total,
             "subtotal" to invoice.subtotal,
             "iva" to invoice.tax,
@@ -133,6 +174,7 @@ class FirebaseService(
             "concepto" to invoice.notes,
             "archivo" to invoice.filePath,
             "fileName" to invoice.fileName,
+            "fileUrl" to (fileUrl ?: ""), // URL del archivo en Firebase Storage
             "tipo" to "recibida",
             "created_at" to com.google.firebase.Timestamp.now(),
             "updated_at" to com.google.firebase.Timestamp.now()
@@ -148,9 +190,13 @@ class FirebaseService(
             Date()
         }
         
+        // Si hay fileUrl, usarlo; si no, usar el path local
+        val fileUrl = doc.getString("fileUrl") ?: ""
+        val filePath = if (fileUrl.isNotEmpty()) fileUrl else (doc.getString("archivo") ?: "")
+        
         return Invoice(
             id = 0, // Room generará el ID
-            filePath = doc.getString("archivo") ?: "",
+            filePath = filePath,
             fileName = doc.getString("fileName") ?: "firebase_import.pdf",
             fileType = "pdf",
             date = fecha,
@@ -164,4 +210,3 @@ class FirebaseService(
         )
     }
 }
-

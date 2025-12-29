@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FileText, Plus, Search, Trash2, Edit, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { getFacturas, deleteFactura } from '../api';
 import { Factura } from '../types';
+import FileViewer from '../components/FileViewer';
 
 interface MonthGroup {
   month: string;
@@ -256,19 +257,26 @@ export default function FacturasList() {
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link
-                            to={`/facturas/${factura.id}`}
-                            className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors"
-                          >
-                            <Edit size={16} />
-                          </Link>
-                          <button
-                            onClick={() => handleDelete(factura.id)}
-                            className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400 transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                        <div className="flex items-center gap-2">
+                          {factura.fileUrl && (
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} />
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Link
+                              to={`/facturas/${factura.id}`}
+                              className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors"
+                            >
+                              <Edit size={16} />
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(factura.id)}
+                              className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
