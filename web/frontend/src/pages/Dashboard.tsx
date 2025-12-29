@@ -52,7 +52,7 @@ export default function Dashboard() {
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
         >
           <Plus size={20} />
-          Nueva Factura
+          Ingresar Factura
         </Link>
       </div>
 

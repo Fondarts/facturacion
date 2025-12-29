@@ -72,7 +72,7 @@ export default function FacturaNew() {
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">Nueva Factura</h1>
+          <h1 className="text-2xl font-bold text-white">Ingresar Factura</h1>
           <p className="text-slate-400">Registrar una factura recibida</p>
         </div>
       </div>
