@@ -12,6 +12,10 @@ interface MonthGroup {
   facturas: Factura[];
   total: number;
   iva: number;
+  totalGastos: number; // Facturas recibidas (gastos)
+  totalGeneradas: number; // Facturas generadas
+  cantidadGastos: number;
+  cantidadGeneradas: number;
 }
 
 export default function FacturasList() {
@@ -84,7 +88,11 @@ export default function FacturasList() {
         monthName: monthName.charAt(0).toUpperCase() + monthName.slice(1),
         facturas: [], 
         total: 0, 
-        iva: 0 
+        iva: 0,
+        totalGastos: 0,
+        totalGeneradas: 0,
+        cantidadGastos: 0,
+        cantidadGeneradas: 0
       };
       groups.push(group);
     }
@@ -92,6 +100,15 @@ export default function FacturasList() {
     group.facturas.push(factura);
     group.total += factura.total || 0;
     group.iva += factura.iva || 0;
+    
+    // Diferenciar por tipo
+    if (factura.tipo === 'recibida') {
+      group.totalGastos += factura.total || 0;
+      group.cantidadGastos += 1;
+    } else if (factura.tipo === 'generada') {
+      group.totalGeneradas += factura.total || 0;
+      group.cantidadGeneradas += 1;
+    }
     
     return groups;
   }, []).sort((a, b) => b.month.localeCompare(a.month));
@@ -407,9 +424,33 @@ export default function FacturasList() {
                 </div>
                 
                 <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-emerald-400">{formatCurrency(group.total)}</p>
-                    <p className="text-slate-400 text-sm">IVA: {formatCurrency(group.iva)}</p>
+                  <div className="text-right space-y-1">
+                    {group.totalGastos > 0 && (
+                      <div>
+                        <p className="text-lg font-bold text-emerald-400">
+                          Gastos: {formatCurrency(group.totalGastos)}
+                        </p>
+                        <p className="text-slate-500 text-xs">
+                          {group.cantidadGastos} factura{group.cantidadGastos !== 1 ? 's' : ''} recibida{group.cantidadGastos !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    )}
+                    {group.totalGeneradas > 0 && (
+                      <div>
+                        <p className="text-lg font-bold text-amber-400">
+                          Generadas: {formatCurrency(group.totalGeneradas)}
+                        </p>
+                        <p className="text-slate-500 text-xs">
+                          {group.cantidadGeneradas} factura{group.cantidadGeneradas !== 1 ? 's' : ''} generada{group.cantidadGeneradas !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    )}
+                    {group.totalGastos === 0 && group.totalGeneradas === 0 && (
+                      <div>
+                        <p className="text-2xl font-bold text-slate-400">{formatCurrency(group.total)}</p>
+                        <p className="text-slate-500 text-sm">IVA: {formatCurrency(group.iva)}</p>
+                      </div>
+                    )}
                   </div>
                   {expandedMonths.has(group.month) ? (
                     <ChevronDown className="text-slate-400" size={24} />
