@@ -365,7 +365,7 @@ export default function Facturar() {
       
       // Dibujar fondo más oscuro para filas pares (índice 1, 3, 5...)
       if (index % 2 === 1) {
-        doc.setFillColor(230, 230, 230); // Gris más oscuro que el fondo general
+        doc.setFillColor(210, 210, 210); // Gris más oscuro que el fondo general
         doc.rect(0, yPos - itemHeight + 2, pageWidth, itemHeight, 'F');
       }
       
