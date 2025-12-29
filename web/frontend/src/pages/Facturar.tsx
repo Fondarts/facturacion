@@ -11,8 +11,7 @@ type FormatoFecha = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD-MM-YYYY';
 export default function Facturar() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
-  const [numeroFactura, setNumeroFactura] = useState<number>(1);
-  const [loadingNumero, setLoadingNumero] = useState(true);
+  const [numeroFactura, setNumeroFactura] = useState<string>('');
   const [clientes, setClientes] = useState<ClienteData[]>([]);
   const [emisores, setEmisores] = useState<EmisorData[]>([]);
   const [showClienteDropdown, setShowClienteDropdown] = useState(false);
@@ -23,7 +22,7 @@ export default function Facturar() {
     cliente: '',
     fecha: new Date().toISOString().split('T')[0],
     concepto: '',
-    tasa_iva: 21,
+    tasa_iva: 0,
     moneda: 'EUR' as Moneda,
     formatoFecha: 'DD/MM/YYYY' as FormatoFecha,
   });
@@ -36,20 +35,6 @@ export default function Facturar() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        // Cargar número de factura
-        const { getFacturas } = await import('../api');
-        const facturasList = await getFacturas();
-        const generadas = facturasList.filter(f => f.tipo === 'generada');
-        let maxNumero = 0;
-        generadas.forEach(f => {
-          const match = f.concepto?.match(/FAC[-\s]?(\d+)/i) || f.concepto?.match(/#(\d+)/i);
-          if (match) {
-            const num = parseInt(match[1]);
-            if (num > maxNumero) maxNumero = num;
-          }
-        });
-        setNumeroFactura(maxNumero + 1);
-
         // Cargar clientes y emisores
         const [clientesList, emisoresList] = await Promise.all([
           getClientes(),
@@ -72,8 +57,6 @@ export default function Facturar() {
         }
       } catch (error) {
         console.error('Error loading initial data:', error);
-      } finally {
-        setLoadingNumero(false);
       }
     }
     loadInitialData();
@@ -201,7 +184,7 @@ export default function Facturar() {
     // Número de factura
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Nº FACTURA: FAC-${numeroFactura.toString().padStart(4, '0')}`, margin, yPos);
+    doc.text(`Nº FACTURA: ${numeroFactura || 'Sin número'}`, margin, yPos);
     yPos += 10;
 
     // Fecha
@@ -281,7 +264,7 @@ export default function Facturar() {
     doc.text(`TOTAL:`, margin + 100, yPos, { align: 'right' });
     doc.text(formatCurrency(total), margin + 160, yPos, { align: 'right' });
 
-    doc.save(`FACTURA-${numeroFactura.toString().padStart(4, '0')}.pdf`);
+    doc.save(`FACTURA-${numeroFactura || 'sin-numero'}.pdf`);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -300,7 +283,7 @@ export default function Facturar() {
       const data = new FormData();
       data.append('establecimiento', formData.cliente.split('\n')[0] || formData.cliente);
       data.append('fecha', formData.fecha);
-      data.append('concepto', `FAC-${numeroFactura.toString().padStart(4, '0')} - Factura generada`);
+      data.append('concepto', numeroFactura ? `Factura ${numeroFactura}` : 'Factura generada');
       data.append('subtotal', subtotal.toString());
       data.append('tasa_iva', (formData.tasa_iva / 100).toString());
       data.append('iva', iva.toString());
@@ -317,13 +300,6 @@ export default function Facturar() {
     }
   }
 
-  if (loadingNumero) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -356,16 +332,13 @@ export default function Facturar() {
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Número de Factura
               </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="1"
-                  value={numeroFactura}
-                  onChange={(e) => setNumeroFactura(parseInt(e.target.value) || 1)}
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                />
-              </div>
-              <span className="text-xs text-slate-400 mt-1 block">FAC-{numeroFactura.toString().padStart(4, '0')}</span>
+              <input
+                type="text"
+                value={numeroFactura}
+                onChange={(e) => setNumeroFactura(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                placeholder="Ej: FAC-001, INV-2024-001, etc."
+              />
             </div>
 
             {/* Moneda */}
