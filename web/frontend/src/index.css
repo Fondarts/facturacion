@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Clash Display", system-ui, sans-serif;
+  --font-body: "Satoshi", system-ui, sans-serif;
+  
+  --color-midnight: #0f172a;
+  --color-slate-dark: #1e293b;
+  --color-emerald-bright: #10b981;
+  --color-amber-warm: #f59e0b;
+  --color-rose-soft: #f43f5e;
+}
+
+@layer base {
+  body {
+    @apply bg-midnight text-slate-100 font-body antialiased;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
