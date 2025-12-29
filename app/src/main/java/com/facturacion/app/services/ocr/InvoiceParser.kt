@@ -263,6 +263,8 @@ object InvoiceParser {
         val totalPatterns = listOf(
             Regex("TOTAL\\s*\\(Impuestos\\s*Incl\\.?\\)[^\\n]*?([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE),
             Regex("TOTAL\\s+A\\s+PAGAR[^\\n]*?([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE),
+            // Formato "Total EUR" usado en facturas tipo Real Madrid
+            Regex("TOTAL\\s+EUR[^\\n]*?([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE),
             // Patrón que NO matchee "Subtotal" - requiere inicio de línea antes de TOTAL
             Regex("(?:^|\\n)\\s*TOTAL[^\\n]*?([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE),
             // Fallback más permisivo pero solo en la misma línea
@@ -285,15 +287,17 @@ object InvoiceParser {
         
         // Patrones para IVA
         val taxPatterns = listOf(
-            Regex("I\\.?V\\.?A\\.?\\s*\\d+[,.]?\\d*\\s*%\\s*:?\\s*([\\d.,]+)\\s*€?", RegexOption.IGNORE_CASE),
-            // Formato "CUOTA" con valor en la misma línea
+            // Formato "CUOTA" con valor en la misma línea (prioridad alta)
             Regex("CUOTA[^\\n]*?([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE),
             Regex("IMPORTE\\s*IVA\\s*:?\\s*([\\d.,]+)\\s*€?", RegexOption.IGNORE_CASE),
-            Regex("IVA\\s*:?\\s*([\\d.,]+)\\s*€?", RegexOption.IGNORE_CASE),
-            // Formato: "I.V.A. 10,00% 4,96"
-            Regex("I\\.?V\\.?A\\.?\\s*([\\d.,]+)\\s*%\\s*([\\d.,]+)", RegexOption.IGNORE_CASE),
+            // Formato: "I.V.A. 10,00% 4,96" pero NO "(s/63,64)" que es referencia a base
+            Regex("I\\.?V\\.?A\\.?\\s*([\\d.,]+)\\s*%\\s+([\\d.,]+)(?!\\s*[,)])", RegexOption.IGNORE_CASE),
+            // IVA con porcentaje y valor después, excluyendo formato "(s/...)"
+            Regex("I\\.?V\\.?A\\.?\\s*\\d+[,.]?\\d*\\s*%[^(s/][^\\n]*?([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE),
             // Formato "Impuesto:" usado en algunas facturas PDF
-            Regex("Impuesto\\s*:?\\s*([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE)
+            Regex("Impuesto\\s*:?\\s*([\\d]+[.,]\\d{2})\\s*€?", RegexOption.IGNORE_CASE),
+            // IVA simple pero no dentro de paréntesis
+            Regex("(?<!\\()IVA\\s*:?\\s*([\\d]+[.,]\\d{2})\\s*€?(?!\\))", RegexOption.IGNORE_CASE)
         )
         
         // Patrones para TASA DE IVA
@@ -406,6 +410,36 @@ object InvoiceParser {
         // Recolectar TODOS los números del texto para análisis
         val allNumbersInText = lines.flatMap { extractNumbers(it) }
         log("Todos los números en el texto: $allNumbersInText")
+        
+        // Detectar formato especial "X% IVA (s/BASE)" donde s/ indica "sobre" la base
+        // Ej: "10% IVA (s/63,64)" significa: 10% de IVA sobre base de 63,64 = 6,36
+        val fullText = lines.joinToString("\n")
+        val ivaConBasePattern = Regex("(\\d+)\\s*%\\s*IVA\\s*\\(s/([\\d.,]+)\\)", RegexOption.IGNORE_CASE)
+        val ivaConBaseMatch = ivaConBasePattern.find(fullText)
+        if (ivaConBaseMatch != null) {
+            val rate = ivaConBaseMatch.groupValues[1].toDoubleOrNull()
+            val base = parseSpanishNumber(ivaConBaseMatch.groupValues[2])
+            if (rate != null && base != null) {
+                taxRate = rate / 100.0
+                subtotal = base
+                tax = Math.round(base * taxRate!! * 100) / 100.0  // Redondear a 2 decimales
+                log("Detectado formato 'X% IVA (s/BASE)': tasa=$rate%, base=$base, IVA calculado=$tax")
+                
+                // Buscar "Total EUR" para el total
+                val totalEurPattern = Regex("Total\\s+EUR[^\\n]*?([\\d]+[.,]\\d{2})", RegexOption.IGNORE_CASE)
+                val totalEurMatch = totalEurPattern.find(fullText)
+                if (totalEurMatch != null) {
+                    total = parseSpanishNumber(totalEurMatch.groupValues[1])
+                    log("Total EUR encontrado: $total")
+                }
+                
+                // Validar que total = subtotal + tax
+                if (total != null && abs(total!! - (subtotal!! + tax!!)) < 0.1) {
+                    log("Valores validados matemáticamente correctos")
+                    return MonetaryValues(total, subtotal, tax, taxRate)
+                }
+            }
+        }
         
         for (i in lines.indices) {
             val line = lines[i].uppercase()

@@ -589,5 +589,61 @@ IMPORTE
         assertEquals("IVA incorrecto", 3.14, result.tax ?: 0.0, 0.01)
         assertEquals("Tasa IVA incorrecta", 0.10, result.taxRate ?: 0.0, 0.01)
     }
+
+    @Test
+    fun testRealMadridTourBernabeu() {
+        // Factura Real Madrid con formato "X% IVA (s/BASE)"
+        val text = """
+REAL MADRID, C.F.
+Avda. ConcCorreos electrónicos Factura_2526-CF-003389.pdfha Espina,1
+28036 MADRID (Madrid)
+NIF G28034718
+Teléfono 91.398.43.00
+Melchor Fernandez Almagro 10 2A
+28029 MADRID (Madrid)
+Federico Ondarts
+NIF:  Z0641643V
+FACTURA Nº
+Fecha expedición: 7 octubre 2025
+2526-CF-003389
+FECHA OPERACIÓN CONCEPTO IMPORTE
+30/09/2025
+Factura Pagada
+Visita Tour Bernabéu 30/09/2025 
+Localizador 87983001 
+Nº Ticket 2526TB21-00098564
+Total EUR
+Base imponible
+10% IVA (s/63,64)
+63,64
+70,00
+6,36
+Página 1 de 1
+        """.trimIndent()
+
+        val result = InvoiceParser.parse(text)
+
+        println("\n=== Real Madrid Tour Bernabéu ===")
+        println("Establecimiento: ${result.establishment}")
+        println("Fecha: ${result.date}")
+        println("Total: ${result.total}")
+        println("Subtotal: ${result.subtotal}")
+        println("IVA: ${result.tax}")
+        println("Tasa IVA: ${result.taxRate?.times(100)}%")
+        println("Confianza: ${result.confidence}")
+
+        assertNotNull("Establecimiento no detectado", result.establishment)
+        assertEquals("Establecimiento incorrecto", "REAL MADRID, C.F.", result.establishment)
+        assertNotNull("Fecha no detectada", result.date)
+        
+        // Valores esperados:
+        // Base imponible (Subtotal): 63,64
+        // IVA (10% de 63,64): 6,36
+        // Total: 70,00
+        assertEquals("Total incorrecto", 70.00, result.total ?: 0.0, 0.01)
+        assertEquals("Subtotal incorrecto", 63.64, result.subtotal ?: 0.0, 0.01)
+        assertEquals("IVA incorrecto", 6.36, result.tax ?: 0.0, 0.01)
+        assertEquals("Tasa IVA incorrecta", 0.10, result.taxRate ?: 0.0, 0.01)
+    }
 }
 
