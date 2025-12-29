@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, Plus, Search, Trash2, Edit, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { FileText, Plus, Search, Trash2, Edit, Calendar, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { getFacturas, deleteFactura } from '../api';
-import { Factura } from '../types';
+import { Factura, FacturaItem } from '../types';
 import FileViewer from '../components/FileViewer';
+import jsPDF from 'jspdf';
 
 interface MonthGroup {
   month: string;
@@ -98,6 +99,188 @@ export default function FacturasList() {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
   };
+
+  function generatePDFFromFactura(factura: Factura) {
+    const doc = new jsPDF();
+    
+    // Detectar idioma del concepto (si tiene "INVOICE" probablemente es inglés)
+    const isEnglish = factura.concepto?.toUpperCase().includes('INVOICE') || false;
+    const texts = isEnglish ? {
+      factura: 'INVOICE',
+      numeroFactura: 'INVOICE NO:',
+      fecha: 'DATE:',
+      de: 'FROM:',
+      para: 'TO:',
+      descripcion: 'DESCRIPTION',
+      cantidad: 'QTY',
+      precio: 'PRICE',
+      total: 'TOTAL',
+      subtotal: 'Subtotal:',
+      iva: 'VAT',
+      totalFinal: 'TOTAL:',
+      sinNumero: 'No number',
+      sinEspecificar: 'Not specified'
+    } : {
+      factura: 'FACTURA',
+      numeroFactura: 'Nº FACTURA:',
+      fecha: 'FECHA:',
+      de: 'DE:',
+      para: 'PARA:',
+      descripcion: 'DESCRIPCIÓN',
+      cantidad: 'CANT.',
+      precio: 'PRECIO',
+      total: 'TOTAL',
+      subtotal: 'Subtotal:',
+      iva: 'IVA',
+      totalFinal: 'TOTAL:',
+      sinNumero: 'Sin número',
+      sinEspecificar: 'Sin especificar'
+    };
+
+    // Detectar moneda del total
+    const totalStr = formatCurrency(factura.total);
+    const moneda = totalStr.includes('€') ? 'EUR' : totalStr.includes('$') ? 'USD' : 'EUR';
+    
+    const formatCurrencyPDF = (value: number) => {
+      return new Intl.NumberFormat('es-ES', { 
+        style: 'currency', 
+        currency: moneda 
+      }).format(value);
+    };
+
+    const formatDate = (dateStr: string) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      const day = d.getDate().toString().padStart(2, '0');
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+    
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const columnWidth = (pageWidth - 2 * margin - 20) / 2;
+    let yPos = margin;
+
+    // Título
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(texts.factura, margin, yPos);
+    yPos += 15;
+
+    // Número de factura (extraer del concepto si existe)
+    const numeroMatch = factura.concepto?.match(/FAC[-\s]?([^\s-]+)/i) || factura.concepto?.match(/#(\d+)/i);
+    const numeroFactura = numeroMatch ? numeroMatch[1] : factura.id.substring(0, 8);
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${texts.numeroFactura} ${numeroFactura}`, margin, yPos);
+    yPos += 10;
+
+    // Fecha
+    doc.text(`${texts.fecha} ${formatDate(factura.fecha)}`, margin, yPos);
+    yPos += 15;
+
+    // DE y PARA en dos columnas (si hay datos en concepto, intentar extraer)
+    const leftX = margin;
+    const rightX = margin + columnWidth + 20;
+    const startY = yPos;
+
+    // Para facturas generadas, el concepto puede contener info del emisor
+    // Por ahora, dejamos vacío el "DE:" si no hay datos
+    doc.setFont('helvetica', 'bold');
+    doc.text(texts.de, leftX, startY);
+    let currentY = startY + 7;
+    doc.setFont('helvetica', 'normal');
+    doc.text(texts.sinEspecificar, leftX, currentY);
+    currentY += 7;
+
+    // Cliente (establecimiento)
+    doc.setFont('helvetica', 'bold');
+    doc.text(texts.para, rightX, startY);
+    let currentYRight = startY + 7;
+    doc.setFont('helvetica', 'normal');
+    const clienteLines = doc.splitTextToSize(factura.establecimiento || texts.sinEspecificar, columnWidth);
+    doc.text(clienteLines, rightX, currentYRight);
+    currentYRight += clienteLines.length * 7;
+
+    yPos = Math.max(currentY, currentYRight) + 10;
+
+    // Tabla de items
+    yPos += 5;
+    const paddingTop = 10;
+    const tableStartY = yPos - paddingTop;
+    
+    let tableHeight = paddingTop;
+    tableHeight += 7; // Header
+    const items = factura.items || [];
+    items.forEach((item) => {
+      const descLines = doc.splitTextToSize(item.descripcion || '', 80);
+      tableHeight += Math.max(descLines.length * 5, 8);
+    });
+    tableHeight += 5;
+    tableHeight += 7;
+    tableHeight += 10;
+    tableHeight += 7; // Subtotal
+    tableHeight += 7; // IVA
+    tableHeight += 7; // TOTAL
+    
+    doc.setFillColor(240, 240, 240);
+    doc.roundedRect(0, tableStartY, pageWidth, tableHeight, 0, 0, 'F');
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(texts.descripcion, margin + 2, yPos);
+    doc.text(texts.cantidad, margin + 100, yPos);
+    doc.text(texts.precio, margin + 120, yPos);
+    doc.text(texts.total, margin + 160, yPos, { align: 'right' });
+    yPos += 7;
+    
+    doc.line(margin + 2, yPos, pageWidth - margin - 2, yPos);
+    yPos += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    items.forEach((item, index) => {
+      const descLines = doc.splitTextToSize(item.descripcion || '', 80);
+      const itemHeight = Math.max(descLines.length * 5, 8);
+      const itemTotal = item.cantidad * item.precio_unitario;
+      
+      if (index % 2 === 1) {
+        doc.setFillColor(210, 210, 210);
+        doc.rect(0, yPos - itemHeight + 2, pageWidth, itemHeight, 'F');
+      }
+      
+      doc.text(descLines, margin + 2, yPos);
+      doc.text(item.cantidad.toString(), margin + 100, yPos);
+      doc.text(formatCurrencyPDF(item.precio_unitario), margin + 120, yPos);
+      doc.text(formatCurrencyPDF(itemTotal), margin + 160, yPos, { align: 'right' });
+      
+      yPos += itemHeight;
+    });
+
+    yPos += 5;
+    doc.line(margin + 2, yPos, pageWidth - margin - 2, yPos);
+    yPos += 10;
+
+    // Totales
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`${texts.subtotal}`, margin + 100, yPos, { align: 'right' });
+    doc.text(formatCurrencyPDF(factura.subtotal), margin + 160, yPos, { align: 'right' });
+    yPos += 7;
+    
+    doc.text(`${texts.iva} (${(factura.tasa_iva * 100).toFixed(0)}%):`, margin + 100, yPos, { align: 'right' });
+    doc.text(formatCurrencyPDF(factura.iva), margin + 160, yPos, { align: 'right' });
+    yPos += 7;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(`${texts.totalFinal}`, margin + 100, yPos, { align: 'right' });
+    doc.text(formatCurrencyPDF(factura.total), margin + 160, yPos, { align: 'right' });
+
+    doc.save(`FACTURA-${numeroFactura}.pdf`);
+  }
 
   if (loading) {
     return (
@@ -262,6 +445,15 @@ export default function FacturasList() {
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                               <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} />
                             </div>
+                          )}
+                          {factura.tipo === 'generada' && (
+                            <button
+                              onClick={() => generatePDFFromFactura(factura)}
+                              className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-amber-500/20 hover:text-amber-400 transition-colors opacity-0 group-hover:opacity-100"
+                              title="Descargar PDF"
+                            >
+                              <Download size={16} />
+                            </button>
                           )}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Link
