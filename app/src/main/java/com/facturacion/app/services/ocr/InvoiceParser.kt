@@ -139,11 +139,14 @@ object InvoiceParser {
             // Saltar líneas muy cortas o muy largas
             if (line.length < 3 || line.length > 50) continue
             
-            // Saltar si es una ciudad española
-            if (spanishCities.any { upperLine.trim() == it || upperLine.contains("$it ") }) continue
+            // Saltar si es una ciudad española (exacta o contiene)
+            if (spanishCities.any { upperLine.trim() == it || upperLine.startsWith("$it ") || upperLine.startsWith("$it,") }) continue
             
-            // Saltar si coincide con patrón de ciudad
-            if (cityPatterns.any { upperLine.matches(Regex(".*$it.*", RegexOption.IGNORE_CASE)) }) continue
+            // Saltar si contiene DONOSTIA o SAN SEBASTIAN (con o sin código postal)
+            if (upperLine.contains("DONOSTIA") || upperLine.contains("SAN SEBASTIAN")) continue
+            
+            // Saltar si coincide con patrón de ciudad con código postal
+            if (cityPatterns.any { Regex(it, RegexOption.IGNORE_CASE).containsMatchIn(upperLine) }) continue
             
             // Saltar si contiene patrones excluidos
             val isExcluded = excludedPatterns.any { pattern ->
