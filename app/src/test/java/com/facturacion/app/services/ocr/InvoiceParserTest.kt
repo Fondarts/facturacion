@@ -258,9 +258,10 @@ class InvoiceParserTest {
 
     @Test
     fun testElectronowPdfOCR() {
-        // Texto extraído de PDF ElectroNow - formato "Base Imponible | % IVA | Cuota IVA | Total"
+        // Texto REAL extraído por OCR del PDF ElectroNow
+        // Nota: los valores están ANTES del encabezado "Base Imponible"
         val text = """
-SEVILLA
+SEVILLACorreos electrónicos Factura_1N_24.521.pdf
 CALLE PERAL 51, PISO 2 PUERTA A
 41002
 Sevilla
@@ -282,11 +283,17 @@ P/159.541Albarán:
 362,81 362,81LAVADORA HISENSE WD3S9043BW3 D/A 9-6KG - 1,006901101830166
 20,66 20,66SERVICIO ADICIONAL DE INSTALACION BASICA 1,00
 0,00 0,00SERVICIO ENTREGA DOMICILIO 1,00
+Si tiene alguna duda sobre esta factura puede contactar con nosotros
+Email: atencionalcliente@electronow.es
+Teléfono: 943 970 355
 Método de Pago:
 464,00Vcto: 02/06/2025TARJETA ECOMMERCE
 ¡Gracias! Por confiar en ElectroNOW
 464,00 80,53 21 383,47
-Base Imponible % IVA Cuota IVA Total
+Base Imponible
+Base
+% IVA Cuota IVA Total
+Observaciones:
         """.trimIndent()
 
         val result = InvoiceParser.parse(text)

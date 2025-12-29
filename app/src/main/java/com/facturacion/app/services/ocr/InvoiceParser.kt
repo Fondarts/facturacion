@@ -99,6 +99,16 @@ object InvoiceParser {
             "SALAMANCA", "ALBACETE", "GETAFE", "ALCALA", "ESPAÑA", "ESPANA"
         )
         
+        // Patrones de ciudades que pueden aparecer combinados
+        val cityPatterns = listOf(
+            "DONOSTIA.*SAN.*SEBASTIAN",
+            "SAN.*SEBASTIAN",
+            "\\d{5}.*MADRID",
+            "\\d{5}.*BARCELONA",
+            "\\d{5}.*SEVILLA",
+            "\\d{5}.*VALENCIA"
+        )
+        
         // Patrones que indican nombre de empresa
         val companyIndicators = listOf("S\\.?L\\.?", "S\\.?A\\.?", "S\\.?L\\.?U\\.?", "S\\.?A\\.?U\\.?")
         
@@ -131,6 +141,9 @@ object InvoiceParser {
             
             // Saltar si es una ciudad española
             if (spanishCities.any { upperLine.trim() == it || upperLine.contains("$it ") }) continue
+            
+            // Saltar si coincide con patrón de ciudad
+            if (cityPatterns.any { upperLine.matches(Regex(".*$it.*", RegexOption.IGNORE_CASE)) }) continue
             
             // Saltar si contiene patrones excluidos
             val isExcluded = excludedPatterns.any { pattern ->
@@ -418,16 +431,23 @@ object InvoiceParser {
             }
             
             // Detectar formato "Base Imponible | % IVA | Cuota IVA | Total" (ej: ElectroNow)
-            // Los valores pueden estar en orden: Total, Cuota, %, Base o Base, %, Cuota, Total
-            if ((line.contains("BASE") && line.contains("IMPONIBLE") && line.contains("CUOTA")) ||
-                (line.contains("BASE") && line.contains("IVA") && line.contains("TOTAL") && line.contains("%"))) {
+            // Los valores pueden estar ANTES o DESPUÉS del encabezado
+            if ((line.contains("BASE") && line.contains("IMPONIBLE")) ||
+                (line.contains("BASE") && line.contains("IVA") && line.contains("TOTAL"))) {
                 
-                log("Detectado encabezado Base Imponible/Cuota IVA/Total en línea $i: ${lines[i]}")
+                log("Detectado encabezado Base Imponible/Total en línea $i: ${lines[i]}")
                 
-                // Buscar línea con los valores (4 números: Base, %, Cuota, Total)
-                for (j in maxOf(0, i - 5) until minOf(i + 5, lines.size)) {
+                // Buscar línea con los valores (puede estar antes o después del encabezado)
+                // Rango ampliado: 10 líneas antes y 5 después
+                for (j in maxOf(0, i - 10) until minOf(i + 5, lines.size)) {
                     if (j == i) continue
                     val valueLine = lines[j]
+                    
+                    // Saltar líneas que son claramente no-valores
+                    val upperValueLine = valueLine.uppercase()
+                    if (upperValueLine.contains("GRACIAS") || upperValueLine.contains("EMAIL") ||
+                        upperValueLine.contains("TELEFONO") || upperValueLine.contains("OBSERV")) continue
+                    
                     val numbers = extractNumbers(valueLine)
                     
                     // Buscar también porcentajes enteros (21, 10, 4)
@@ -443,43 +463,43 @@ object InvoiceParser {
                         }
                     }
                     
+                    // Necesitamos al menos 3 números: tasa, base/cuota, total
                     if (allNumbers.size >= 3) {
-                        log("Números encontrados cerca del encabezado IVA: $allNumbers")
+                        log("Números encontrados en línea $j: $allNumbers")
                         
                         // Identificar la tasa de IVA (4, 10 o 21)
                         val possibleRate = allNumbers.find { it == 21.0 || it == 10.0 || it == 4.0 }
                         if (possibleRate != null) {
-                            taxRate = possibleRate / 100.0
-                            
                             // Los otros valores: el mayor es Total, el siguiente es Base, el menor es Cuota
                             val otherValues = allNumbers.filter { it != possibleRate && it > 1 }.sortedDescending()
                             
                             if (otherValues.size >= 3) {
-                                total = otherValues[0]
-                                subtotal = otherValues[1]
-                                tax = otherValues[2]
+                                val candidateTotal = otherValues[0]
+                                val candidateBase = otherValues[1]
+                                val candidateTax = otherValues[2]
+                                
+                                // Validar matemáticamente: base + cuota = total
+                                if (kotlin.math.abs(candidateTotal - (candidateBase + candidateTax)) < 0.1) {
+                                    total = candidateTotal
+                                    subtotal = candidateBase
+                                    tax = candidateTax
+                                    taxRate = possibleRate / 100.0
+                                    log("Formato Base/Cuota/Total validado: Total=$total, Base=$subtotal, IVA=$tax, Tasa=$possibleRate%")
+                                    break
+                                }
                             } else if (otherValues.size >= 2) {
-                                // Intentar deducir el tercero
                                 val v1 = otherValues[0]
                                 val v2 = otherValues[1]
+                                val calculatedTax = v1 - v2
                                 
-                                // Verificar cuál combinación cuadra: base + cuota = total
-                                if (kotlin.math.abs(v2 + (v2 * possibleRate / 100.0) - v1) < 1) {
+                                // Verificar que la cuota calculada corresponde a la tasa
+                                val expectedTax = v2 * (possibleRate / 100.0)
+                                if (kotlin.math.abs(calculatedTax - expectedTax) < 1) {
                                     total = v1
                                     subtotal = v2
-                                    tax = v1 - v2
-                                } else {
-                                    total = v1
-                                    subtotal = v2
-                                    tax = v1 - v2
-                                }
-                            }
-                            
-                            // Validar que cuadra matemáticamente
-                            if (total != null && subtotal != null && tax != null) {
-                                val expectedTotal = subtotal!! + tax!!
-                                if (kotlin.math.abs(total!! - expectedTotal) < 0.1) {
-                                    log("Formato Base/Cuota/Total validado: Total=$total, Base=$subtotal, IVA=$tax, Tasa=$possibleRate%")
+                                    tax = calculatedTax
+                                    taxRate = possibleRate / 100.0
+                                    log("Formato Base/Total deducido: Total=$total, Base=$subtotal, IVA=$tax, Tasa=$possibleRate%")
                                     break
                                 }
                             }
