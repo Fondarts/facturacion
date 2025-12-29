@@ -3,7 +3,7 @@ import { FileText, Plus, BarChart3, Home } from 'lucide-react';
 import FacturasList from './pages/FacturasList';
 import FacturaEdit from './pages/FacturaEdit';
 import FacturaNew from './pages/FacturaNew';
-import GenerarFactura from './pages/GenerarFactura';
+import Facturar from './pages/Facturar';
 import Dashboard from './pages/Dashboard';
 
 function NavLink({ to, children, icon: Icon }: { to: string; children: React.ReactNode; icon: React.ElementType }) {
@@ -44,11 +44,11 @@ function Layout({ children }: { children: React.ReactNode }) {
               <NavLink to="/facturas" icon={FileText}>Facturas</NavLink>
               <NavLink to="/stats" icon={BarChart3}>Estadísticas</NavLink>
               <Link
-                to="/generar"
+                to="/facturar"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
               >
                 <Plus size={18} />
-                Generar Factura
+                Facturar
               </Link>
             </nav>
           </div>
@@ -72,7 +72,7 @@ export default function App() {
           <Route path="/facturas" element={<FacturasList />} />
           <Route path="/facturas/nueva" element={<FacturaNew />} />
           <Route path="/facturas/:id" element={<FacturaEdit />} />
-          <Route path="/generar" element={<GenerarFactura />} />
+          <Route path="/facturar" element={<Facturar />} />
           <Route path="/stats" element={<Dashboard />} />
         </Routes>
       </Layout>
