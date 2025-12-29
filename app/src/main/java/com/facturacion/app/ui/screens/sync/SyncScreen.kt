@@ -12,10 +12,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.facturacion.app.services.sync.SyncPreferences
-import com.facturacion.app.services.sync.SyncResult
-import com.facturacion.app.services.sync.SyncService
+import com.facturacion.app.data.database.AppDatabase
+import com.facturacion.app.data.repositories.InvoiceRepository
+import com.facturacion.app.services.sync.FirebaseService
 import kotlinx.coroutines.launch
+
+sealed class SyncStatus {
+    object Idle : SyncStatus()
+    object Loading : SyncStatus()
+    data class Success(val message: String) : SyncStatus()
+    data class Error(val message: String) : SyncStatus()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,27 +31,22 @@ fun SyncScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val syncService = remember { SyncService(context) }
-    val preferences = remember { SyncPreferences(context) }
     
-    var serverUrl by remember { mutableStateOf("") }
-    var isSyncing by remember { mutableStateOf(false) }
-    var syncResult by remember { mutableStateOf<SyncResult?>(null) }
-    var isTestingConnection by remember { mutableStateOf(false) }
-    var connectionStatus by remember { mutableStateOf<Boolean?>(null) }
-    val lastSync by preferences.lastSync.collectAsState(initial = null)
-    
-    // Cargar URL guardada
-    LaunchedEffect(Unit) {
-        preferences.serverUrl.collect { url ->
-            serverUrl = url
-        }
+    // Inicializar Firebase Service
+    val firebaseService = remember {
+        val database = AppDatabase.getDatabase(context)
+        val repository = InvoiceRepository(database.invoiceDao())
+        FirebaseService(repository)
     }
+    
+    var syncStatus by remember { mutableStateOf<SyncStatus>(SyncStatus.Idle) }
+    var connectionTested by remember { mutableStateOf<Boolean?>(null) }
+    var isTestingConnection by remember { mutableStateOf(false) }
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sincronización Web") },
+                title = { Text("Sincronización Firebase") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
@@ -60,10 +62,13 @@ fun SyncScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Configuración del servidor
+            // Estado de Firebase
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                )
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -79,69 +84,46 @@ fun SyncScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            "Configuración del Servidor",
+                            "Firebase Cloud",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     
-                    OutlinedTextField(
-                        value = serverUrl,
-                        onValueChange = { serverUrl = it },
-                        label = { Text("URL del servidor") },
-                        placeholder = { Text("http://192.168.1.100:3001") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Default.Link, contentDescription = null)
-                        }
+                    Text(
+                        "Las facturas se sincronizan automáticamente con Firebase Firestore en la nube.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    preferences.setServerUrl(serverUrl)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Guardar")
-                        }
-                        
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    isTestingConnection = true
-                                    connectionStatus = null
-                                    preferences.setServerUrl(serverUrl)
-                                    connectionStatus = syncService.testConnection()
-                                    isTestingConnection = false
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isTestingConnection
-                        ) {
-                            if (isTestingConnection) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(Icons.Default.NetworkCheck, contentDescription = null)
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                isTestingConnection = true
+                                connectionTested = null
+                                val result = firebaseService.testConnection()
+                                connectionTested = result.isSuccess
+                                isTestingConnection = false
                             }
-                            Spacer(Modifier.width(8.dp))
-                            Text("Probar")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isTestingConnection
+                    ) {
+                        if (isTestingConnection) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Icon(Icons.Default.NetworkCheck, contentDescription = null)
                         }
+                        Spacer(Modifier.width(8.dp))
+                        Text("Probar Conexión")
                     }
                     
                     // Estado de conexión
-                    connectionStatus?.let { connected ->
+                    connectionTested?.let { connected ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -152,7 +134,7 @@ fun SyncScreen(
                                 tint = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                             )
                             Text(
-                                if (connected) "Conexión exitosa" else "No se pudo conectar",
+                                if (connected) "Conexión exitosa ✓" else "Error de conexión",
                                 color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                             )
                         }
@@ -160,7 +142,7 @@ fun SyncScreen(
                 }
             }
             
-            // Botón de sincronización
+            // Botones de sincronización
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
@@ -179,118 +161,142 @@ fun SyncScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            "Sincronizar Facturas",
+                            "Acciones de Sincronización",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     
-                    Text(
-                        "Envía todas las facturas del móvil al servidor web.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    
-                    lastSync?.let { timestamp ->
-                        Text(
-                            "Última sincronización: $timestamp",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
+                    // Subir a Firebase
                     Button(
                         onClick = {
                             scope.launch {
-                                isSyncing = true
-                                syncResult = null
-                                syncResult = syncService.syncToWeb()
-                                isSyncing = false
+                                syncStatus = SyncStatus.Loading
+                                val result = firebaseService.uploadAllInvoices()
+                                syncStatus = result.fold(
+                                    onSuccess = { SyncStatus.Success(it) },
+                                    onFailure = { SyncStatus.Error(it.message ?: "Error desconocido") }
+                                )
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSyncing
+                        enabled = syncStatus !is SyncStatus.Loading
                     ) {
-                        if (isSyncing) {
+                        if (syncStatus is SyncStatus.Loading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Sincronizando...")
                         } else {
                             Icon(Icons.Default.CloudUpload, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Sincronizar con Web")
                         }
+                        Spacer(Modifier.width(8.dp))
+                        Text("Subir facturas a Firebase")
+                    }
+                    
+                    // Descargar de Firebase
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                syncStatus = SyncStatus.Loading
+                                val result = firebaseService.downloadNewInvoices()
+                                syncStatus = result.fold(
+                                    onSuccess = { SyncStatus.Success(it) },
+                                    onFailure = { SyncStatus.Error(it.message ?: "Error desconocido") }
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = syncStatus !is SyncStatus.Loading
+                    ) {
+                        Icon(Icons.Default.CloudDownload, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Descargar facturas de Firebase")
+                    }
+                    
+                    // Sincronización completa
+                    FilledTonalButton(
+                        onClick = {
+                            scope.launch {
+                                syncStatus = SyncStatus.Loading
+                                val result = firebaseService.syncAll()
+                                syncStatus = result.fold(
+                                    onSuccess = { SyncStatus.Success(it) },
+                                    onFailure = { SyncStatus.Error(it.message ?: "Error desconocido") }
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = syncStatus !is SyncStatus.Loading
+                    ) {
+                        Icon(Icons.Default.SyncAlt, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Sincronización Completa (↑↓)")
                     }
                 }
             }
             
             // Resultado de sincronización
-            syncResult?.let { result ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = when (result) {
-                            is SyncResult.Success -> MaterialTheme.colorScheme.primaryContainer
-                            is SyncResult.Error -> MaterialTheme.colorScheme.errorContainer
-                        }
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+            when (val status = syncStatus) {
+                is SyncStatus.Success -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
                     ) {
                         Row(
+                            modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Icon(
-                                when (result) {
-                                    is SyncResult.Success -> Icons.Default.CheckCircle
-                                    is SyncResult.Error -> Icons.Default.Error
-                                },
+                                Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = when (result) {
-                                    is SyncResult.Success -> MaterialTheme.colorScheme.onPrimaryContainer
-                                    is SyncResult.Error -> MaterialTheme.colorScheme.onErrorContainer
-                                }
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                when (result) {
-                                    is SyncResult.Success -> "Sincronización exitosa"
-                                    is SyncResult.Error -> "Error en sincronización"
-                                },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = when (result) {
-                                    is SyncResult.Success -> MaterialTheme.colorScheme.onPrimaryContainer
-                                    is SyncResult.Error -> MaterialTheme.colorScheme.onErrorContainer
-                                }
+                                status.message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
-                        
-                        Text(
-                            when (result) {
-                                is SyncResult.Success -> "${result.created} creadas, ${result.updated} actualizadas"
-                                is SyncResult.Error -> result.message
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = when (result) {
-                                is SyncResult.Success -> MaterialTheme.colorScheme.onPrimaryContainer
-                                is SyncResult.Error -> MaterialTheme.colorScheme.onErrorContainer
-                            }
-                        )
                     }
                 }
+                is SyncStatus.Error -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                status.message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+                else -> {}
             }
             
             Spacer(Modifier.weight(1f))
             
-            // Instrucciones
+            // Info
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -303,15 +309,15 @@ fun SyncScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "📱 Instrucciones",
+                        "🔥 Firebase Sync",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "1. Asegúrate de que el móvil y el PC estén en la misma red WiFi\n" +
-                        "2. Inicia el servidor web en tu PC (cd web/backend && npm run dev)\n" +
-                        "3. Ingresa la IP de tu PC (ej: 192.168.1.100:3001)\n" +
-                        "4. Prueba la conexión y luego sincroniza",
+                        "• Las facturas se guardan en la nube de Google\n" +
+                        "• Accede desde la web en cualquier lugar\n" +
+                        "• Los datos se sincronizan automáticamente\n" +
+                        "• No necesitas servidor propio",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -320,4 +326,3 @@ fun SyncScreen(
         }
     }
 }
-

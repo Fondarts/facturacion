@@ -88,6 +88,19 @@ interface InvoiceDao {
         LIMIT 1
     """)
     suspend fun findDuplicateInvoice(date: Date, establishment: String, total: Double): InvoiceEntity?
+    
+    // Obtener todas las facturas de una vez (para sincronización)
+    @Query("SELECT * FROM invoices ORDER BY date DESC")
+    suspend fun getAllInvoicesOnce(): List<InvoiceEntity>
+    
+    // Buscar por establecimiento y fecha (para sincronización)
+    @Query("""
+        SELECT * FROM invoices 
+        WHERE establishment = :establishment 
+        AND strftime('%Y-%m-%d', date/1000, 'unixepoch') = :dateStr
+        LIMIT 1
+    """)
+    suspend fun findByEstablishmentAndDate(establishment: String, dateStr: String): InvoiceEntity?
 }
 
 

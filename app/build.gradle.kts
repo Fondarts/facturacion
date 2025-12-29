@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -128,6 +129,10 @@ dependencies {
     
     // DataStore for preferences (server URL)
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+    
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-firestore-ktx")
     
     // Testing
     testImplementation("junit:junit:4.13.2")

@@ -10,12 +10,14 @@ import java.util.Date
 
 class InvoiceRepository(
     private val invoiceDao: InvoiceDao,
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao? = null
 ) {
     fun getAllInvoices(): Flow<List<Invoice>> {
+        val categoriesFlow = categoryDao?.getAllCategories() 
+            ?: kotlinx.coroutines.flow.flowOf(emptyList())
         return combine(
             invoiceDao.getAllInvoices(),
-            categoryDao.getAllCategories()
+            categoriesFlow
         ) { invoices, categories ->
             invoices.map { invoice ->
                 val category = invoice.categoryId?.let { catId ->
@@ -139,6 +141,25 @@ class InvoiceRepository(
         }
         
         return null
+    }
+    
+    // Obtener todas las facturas de una vez (para sincronización)
+    suspend fun getAllInvoicesOnce(): List<Invoice> {
+        return invoiceDao.getAllInvoicesOnce().map { invoice ->
+            val category = invoice.categoryId?.let { 
+                categoryDao?.getCategoryById(it)?.let { Category.fromEntity(it) } 
+            }
+            Invoice.fromEntity(invoice, category)
+        }
+    }
+    
+    // Buscar factura por establecimiento y fecha (para evitar duplicados en sync)
+    suspend fun getInvoiceByEstablishmentAndDate(establishment: String, date: String): Invoice? {
+        val entity = invoiceDao.findByEstablishmentAndDate(establishment, date) ?: return null
+        val category = entity.categoryId?.let { 
+            categoryDao?.getCategoryById(it)?.let { Category.fromEntity(it) } 
+        }
+        return Invoice.fromEntity(entity, category)
     }
 }
 

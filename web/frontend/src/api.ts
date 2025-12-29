@@ -1,48 +1,133 @@
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  orderBy,
+  Timestamp 
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { Factura, Stats } from './types';
 
-const API_URL = '/api';
+const COLLECTION_NAME = 'facturas';
+
+// Convertir documento de Firestore a Factura
+function docToFactura(docSnap: any): Factura {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    establecimiento: data.establecimiento || '',
+    fecha: data.fecha instanceof Timestamp ? data.fecha.toDate().toISOString().split('T')[0] : data.fecha,
+    total: data.total || 0,
+    subtotal: data.subtotal || 0,
+    iva: data.iva || 0,
+    tasa_iva: data.tasa_iva || 0.1,
+    concepto: data.concepto,
+    archivo: data.archivo,
+    tipo: data.tipo || 'recibida',
+    created_at: data.created_at instanceof Timestamp ? data.created_at.toDate().toISOString() : data.created_at,
+    updated_at: data.updated_at instanceof Timestamp ? data.updated_at.toDate().toISOString() : data.updated_at,
+  };
+}
 
 export async function getFacturas(): Promise<Factura[]> {
-  const response = await fetch(`${API_URL}/facturas`);
-  if (!response.ok) throw new Error('Error al obtener facturas');
-  return response.json();
+  const q = query(collection(db, COLLECTION_NAME), orderBy('fecha', 'desc'));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(docToFactura);
 }
 
 export async function getFactura(id: string): Promise<Factura> {
-  const response = await fetch(`${API_URL}/facturas/${id}`);
-  if (!response.ok) throw new Error('Factura no encontrada');
-  return response.json();
+  const docRef = doc(db, COLLECTION_NAME, id);
+  const docSnap = await getDoc(docRef);
+  
+  if (!docSnap.exists()) {
+    throw new Error('Factura no encontrada');
+  }
+  
+  return docToFactura(docSnap);
 }
 
 export async function createFactura(data: FormData): Promise<Factura> {
-  const response = await fetch(`${API_URL}/facturas`, {
-    method: 'POST',
-    body: data,
-  });
-  if (!response.ok) throw new Error('Error al crear factura');
-  return response.json();
+  const facturaData = {
+    establecimiento: data.get('establecimiento') as string,
+    fecha: data.get('fecha') as string,
+    total: parseFloat(data.get('total') as string) || 0,
+    subtotal: parseFloat(data.get('subtotal') as string) || 0,
+    iva: parseFloat(data.get('iva') as string) || 0,
+    tasa_iva: parseFloat(data.get('tasa_iva') as string) || 0.1,
+    concepto: data.get('concepto') as string || null,
+    archivo: data.get('archivo') ? (data.get('archivo') as File).name : null,
+    tipo: data.get('tipo') as string || 'recibida',
+    created_at: Timestamp.now(),
+    updated_at: Timestamp.now(),
+  };
+  
+  const docRef = await addDoc(collection(db, COLLECTION_NAME), facturaData);
+  
+  return {
+    id: docRef.id,
+    ...facturaData,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  } as Factura;
 }
 
 export async function updateFactura(id: string, data: Partial<Factura>): Promise<Factura> {
-  const response = await fetch(`${API_URL}/facturas/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) throw new Error('Error al actualizar factura');
-  return response.json();
+  const docRef = doc(db, COLLECTION_NAME, id);
+  
+  const updateData = {
+    ...data,
+    updated_at: Timestamp.now(),
+  };
+  
+  // Remove id from update data
+  delete (updateData as any).id;
+  delete (updateData as any).created_at;
+  
+  await updateDoc(docRef, updateData);
+  
+  return getFactura(id);
 }
 
 export async function deleteFactura(id: string): Promise<void> {
-  const response = await fetch(`${API_URL}/facturas/${id}`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) throw new Error('Error al eliminar factura');
+  const docRef = doc(db, COLLECTION_NAME, id);
+  await deleteDoc(docRef);
 }
 
 export async function getStats(): Promise<Stats> {
-  const response = await fetch(`${API_URL}/stats`);
-  if (!response.ok) throw new Error('Error al obtener estadísticas');
-  return response.json();
+  const facturas = await getFacturas();
+  
+  const recibidas = facturas.filter(f => f.tipo === 'recibida');
+  
+  const totalFacturas = facturas.length;
+  const totalGastado = recibidas.reduce((sum, f) => sum + (f.total || 0), 0);
+  const totalIva = recibidas.reduce((sum, f) => sum + (f.iva || 0), 0);
+  
+  // Agrupar por mes
+  const porMesMap = new Map<string, { total: number; cantidad: number }>();
+  
+  recibidas.forEach(f => {
+    const mes = f.fecha?.substring(0, 7) || 'unknown';
+    const existing = porMesMap.get(mes) || { total: 0, cantidad: 0 };
+    porMesMap.set(mes, {
+      total: existing.total + (f.total || 0),
+      cantidad: existing.cantidad + 1,
+    });
+  });
+  
+  const porMes = Array.from(porMesMap.entries())
+    .map(([mes, data]) => ({ mes, ...data }))
+    .sort((a, b) => b.mes.localeCompare(a.mes))
+    .slice(0, 12);
+  
+  return {
+    totalFacturas,
+    totalGastado,
+    totalIva,
+    porMes,
+  };
 }
-
