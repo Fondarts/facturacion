@@ -424,9 +424,9 @@ export default function FacturasList() {
                 </div>
                 
                 <div className="flex items-center gap-6">
-                  <div className="text-right flex items-center gap-4">
+                  <div className="flex items-center gap-4">
                     {group.totalGastos > 0 && (
-                      <div>
+                      <div className="text-right">
                         <p className="text-sm font-semibold text-emerald-400">
                           Gastos: {formatCurrency(group.totalGastos)}
                         </p>
@@ -436,7 +436,7 @@ export default function FacturasList() {
                       </div>
                     )}
                     {group.totalGeneradas > 0 && (
-                      <div>
+                      <div className="text-right">
                         <p className="text-sm font-semibold text-amber-400">
                           Generadas: {formatCurrency(group.totalGeneradas)}
                         </p>
@@ -446,7 +446,7 @@ export default function FacturasList() {
                       </div>
                     )}
                     {group.totalGastos === 0 && group.totalGeneradas === 0 && (
-                      <div>
+                      <div className="text-right">
                         <p className="text-2xl font-bold text-slate-400">{formatCurrency(group.total)}</p>
                         <p className="text-slate-500 text-sm">IVA: {formatCurrency(group.iva)}</p>
                       </div>
