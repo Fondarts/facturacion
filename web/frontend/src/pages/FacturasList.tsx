@@ -491,9 +491,9 @@ export default function FacturasList() {
                       </div>
                       
                       <div className="flex items-center gap-4">
-                        <div className="text-right">
+                        <div className="text-right min-w-[140px]">
                           <p className="text-lg font-bold text-white">{formatCurrency(factura.total)}</p>
-                          <div className="flex gap-3 text-xs text-slate-500">
+                          <div className="flex gap-3 text-xs text-slate-500 justify-end">
                             <span>Base: {formatCurrency(factura.subtotal)}</span>
                             <span>IVA: {formatCurrency(factura.iva)}</span>
                           </div>
