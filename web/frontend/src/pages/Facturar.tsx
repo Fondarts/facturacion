@@ -425,6 +425,12 @@ export default function Facturar() {
       data.append('total', total.toString());
       data.append('tipo', 'generada');
       data.append('items', JSON.stringify(items));
+      // Guardar datos adicionales para regenerar el PDF
+      data.append('from', formData.from);
+      data.append('moneda', formData.moneda);
+      data.append('formatoFecha', formData.formatoFecha);
+      data.append('idioma', formData.idioma);
+      data.append('numeroFactura', numeroFactura);
 
       await createFactura(data);
       navigate('/facturas');

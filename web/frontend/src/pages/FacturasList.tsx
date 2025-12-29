@@ -103,9 +103,13 @@ export default function FacturasList() {
   function generatePDFFromFactura(factura: Factura) {
     const doc = new jsPDF();
     
-    // Detectar idioma del concepto (si tiene "INVOICE" probablemente es inglés)
-    const isEnglish = factura.concepto?.toUpperCase().includes('INVOICE') || false;
-    const texts = isEnglish ? {
+    // Usar datos guardados o valores por defecto
+    const idioma = factura.idioma || 'es';
+    const moneda = factura.moneda || 'EUR';
+    const formatoFecha = factura.formatoFecha || 'DD/MM/YYYY';
+    const numeroFactura = factura.numeroFactura || factura.concepto?.match(/FAC[-\s]?([^\s-]+)/i)?.[1] || factura.id.substring(0, 8);
+    
+    const texts = idioma === 'en' ? {
       factura: 'INVOICE',
       numeroFactura: 'INVOICE NO:',
       fecha: 'DATE:',
@@ -137,10 +141,6 @@ export default function FacturasList() {
       sinEspecificar: 'Sin especificar'
     };
 
-    // Detectar moneda del total
-    const totalStr = formatCurrency(factura.total);
-    const moneda = totalStr.includes('€') ? 'EUR' : totalStr.includes('$') ? 'USD' : 'EUR';
-    
     const formatCurrencyPDF = (value: number) => {
       return new Intl.NumberFormat('es-ES', { 
         style: 'currency', 
@@ -153,7 +153,19 @@ export default function FacturasList() {
       const day = d.getDate().toString().padStart(2, '0');
       const month = (d.getMonth() + 1).toString().padStart(2, '0');
       const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
+
+      switch (formatoFecha) {
+        case 'DD/MM/YYYY':
+          return `${day}/${month}/${year}`;
+        case 'MM/DD/YYYY':
+          return `${month}/${day}/${year}`;
+        case 'YYYY-MM-DD':
+          return `${year}-${month}-${day}`;
+        case 'DD-MM-YYYY':
+          return `${day}-${month}-${year}`;
+        default:
+          return `${day}/${month}/${year}`;
+      }
     };
     
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -167,10 +179,6 @@ export default function FacturasList() {
     doc.text(texts.factura, margin, yPos);
     yPos += 15;
 
-    // Número de factura (extraer del concepto si existe)
-    const numeroMatch = factura.concepto?.match(/FAC[-\s]?([^\s-]+)/i) || factura.concepto?.match(/#(\d+)/i);
-    const numeroFactura = numeroMatch ? numeroMatch[1] : factura.id.substring(0, 8);
-    
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
     doc.text(`${texts.numeroFactura} ${numeroFactura}`, margin, yPos);
@@ -180,21 +188,26 @@ export default function FacturasList() {
     doc.text(`${texts.fecha} ${formatDate(factura.fecha)}`, margin, yPos);
     yPos += 15;
 
-    // DE y PARA en dos columnas (si hay datos en concepto, intentar extraer)
+    // DE y PARA en dos columnas
     const leftX = margin;
     const rightX = margin + columnWidth + 20;
     const startY = yPos;
 
-    // Para facturas generadas, el concepto puede contener info del emisor
-    // Por ahora, dejamos vacío el "DE:" si no hay datos
+    // Columna izquierda: DE (emisor)
     doc.setFont('helvetica', 'bold');
     doc.text(texts.de, leftX, startY);
     let currentY = startY + 7;
     doc.setFont('helvetica', 'normal');
-    doc.text(texts.sinEspecificar, leftX, currentY);
-    currentY += 7;
+    if (factura.from) {
+      const fromLines = doc.splitTextToSize(factura.from, columnWidth);
+      doc.text(fromLines, leftX, currentY);
+      currentY += fromLines.length * 7;
+    } else {
+      doc.text(texts.sinEspecificar, leftX, currentY);
+      currentY += 7;
+    }
 
-    // Cliente (establecimiento)
+    // Columna derecha: PARA (cliente)
     doc.setFont('helvetica', 'bold');
     doc.text(texts.para, rightX, startY);
     let currentYRight = startY + 7;

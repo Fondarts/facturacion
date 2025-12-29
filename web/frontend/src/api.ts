@@ -20,6 +20,17 @@ const EMISORES_COLLECTION = 'emisores';
 // Convertir documento de Firestore a Factura
 function docToFactura(docSnap: any): Factura {
   const data = docSnap.data();
+  
+  // Parsear items si existen
+  let items: FacturaItem[] | undefined = undefined;
+  if (data.items && Array.isArray(data.items)) {
+    items = data.items.map((item: any) => ({
+      descripcion: item.descripcion || '',
+      cantidad: item.cantidad || 0,
+      precio_unitario: item.precio_unitario || 0,
+    }));
+  }
+  
   return {
     id: docSnap.id,
     establecimiento: data.establecimiento || '',
@@ -33,6 +44,12 @@ function docToFactura(docSnap: any): Factura {
     fileUrl: data.fileUrl || '',
     fileName: data.fileName || '',
     tipo: data.tipo || 'recibida',
+    items: items,
+    from: data.from,
+    moneda: data.moneda,
+    formatoFecha: data.formatoFecha,
+    idioma: data.idioma,
+    numeroFactura: data.numeroFactura,
     created_at: data.created_at instanceof Timestamp ? data.created_at.toDate().toISOString() : data.created_at,
     updated_at: data.updated_at instanceof Timestamp ? data.updated_at.toDate().toISOString() : data.updated_at,
   };
@@ -56,7 +73,18 @@ export async function getFactura(id: string): Promise<Factura> {
 }
 
 export async function createFactura(data: FormData): Promise<Factura> {
-  const facturaData = {
+  // Parsear items si existen
+  let items: FacturaItem[] = [];
+  const itemsStr = data.get('items') as string;
+  if (itemsStr) {
+    try {
+      items = JSON.parse(itemsStr);
+    } catch (e) {
+      console.error('Error parsing items:', e);
+    }
+  }
+
+  const facturaData: any = {
     establecimiento: data.get('establecimiento') as string,
     fecha: data.get('fecha') as string,
     total: parseFloat(data.get('total') as string) || 0,
@@ -69,12 +97,43 @@ export async function createFactura(data: FormData): Promise<Factura> {
     created_at: Timestamp.now(),
     updated_at: Timestamp.now(),
   };
+
+  // Agregar campos adicionales para facturas generadas
+  if (data.get('from')) {
+    facturaData.from = data.get('from') as string;
+  }
+  if (data.get('moneda')) {
+    facturaData.moneda = data.get('moneda') as string;
+  }
+  if (data.get('formatoFecha')) {
+    facturaData.formatoFecha = data.get('formatoFecha') as string;
+  }
+  if (data.get('idioma')) {
+    facturaData.idioma = data.get('idioma') as string;
+  }
+  if (data.get('numeroFactura')) {
+    facturaData.numeroFactura = data.get('numeroFactura') as string;
+  }
+  
+  // Guardar items si existen
+  if (items.length > 0) {
+    facturaData.items = items;
+  }
   
   const docRef = await addDoc(collection(db, COLLECTION_NAME), facturaData);
   
   return {
     id: docRef.id,
-    ...facturaData,
+    establecimiento: facturaData.establecimiento,
+    fecha: facturaData.fecha,
+    total: facturaData.total,
+    subtotal: facturaData.subtotal,
+    iva: facturaData.iva,
+    tasa_iva: facturaData.tasa_iva,
+    concepto: facturaData.concepto,
+    archivo: facturaData.archivo,
+    tipo: facturaData.tipo,
+    items: items.length > 0 ? items : undefined,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   } as Factura;
