@@ -37,6 +37,22 @@ export default function Facturar() {
   useEffect(() => {
     async function loadInitialData() {
       try {
+        // Cargar configuración guardada
+        const savedConfig = localStorage.getItem('facturar_config');
+        if (savedConfig) {
+          try {
+            const config = JSON.parse(savedConfig);
+            setFormData(prev => ({
+              ...prev,
+              moneda: config.moneda || prev.moneda,
+              formatoFecha: config.formatoFecha || prev.formatoFecha,
+              idioma: config.idioma || prev.idioma,
+            }));
+          } catch (e) {
+            console.error('Error parsing saved config:', e);
+          }
+        }
+
         // Cargar clientes y emisores
         const [clientesList, emisoresList] = await Promise.all([
           getClientes(),
@@ -63,6 +79,16 @@ export default function Facturar() {
     }
     loadInitialData();
   }, []);
+
+  // Guardar configuración cuando cambie
+  useEffect(() => {
+    const config = {
+      moneda: formData.moneda,
+      formatoFecha: formData.formatoFecha,
+      idioma: formData.idioma,
+    };
+    localStorage.setItem('facturar_config', JSON.stringify(config));
+  }, [formData.moneda, formData.formatoFecha, formData.idioma]);
 
   // Cerrar dropdowns al hacer click fuera
   useEffect(() => {
@@ -240,10 +266,10 @@ export default function Facturar() {
     const columnWidth = (pageWidth - 2 * margin - 20) / 2; // Ancho de cada columna con espacio entre ellas
     let yPos = margin;
 
-    // Título
+    // Título (alineado a la izquierda)
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text(texts.factura, pageWidth / 2, yPos, { align: 'center' });
+    doc.text(texts.factura, margin, yPos);
     yPos += 15;
 
     // Número de factura
@@ -287,18 +313,33 @@ export default function Facturar() {
     // Avanzar yPos al máximo de las dos columnas
     yPos = Math.max(currentY, currentYRight) + 10;
 
-    // Tabla de items
+    // Tabla de items con fondo sombreado
     yPos += 5;
+    const tableStartY = yPos - 3;
+    
+    // Calcular altura total de la tabla
+    let tableHeight = 7; // Header
+    items.forEach((item) => {
+      const descLines = doc.splitTextToSize(item.descripcion || '', 80);
+      tableHeight += Math.max(descLines.length * 5, 8);
+    });
+    tableHeight += 5; // Espacio final
+    
+    // Dibujar rectángulo sombreado de fondo
+    doc.setFillColor(240, 240, 240); // Gris claro
+    doc.roundedRect(margin, tableStartY, pageWidth - 2 * margin, tableHeight, 2, 2, 'F');
+    
+    // Headers
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    
-    doc.text(texts.descripcion, margin, yPos);
+    doc.setTextColor(0, 0, 0); // Negro para el texto
+    doc.text(texts.descripcion, margin + 2, yPos);
     doc.text(texts.cantidad, margin + 100, yPos);
     doc.text(texts.precio, margin + 120, yPos);
     doc.text(texts.total, margin + 160, yPos, { align: 'right' });
     yPos += 7;
     
-    doc.line(margin, yPos, pageWidth - margin, yPos);
+    doc.line(margin + 2, yPos, pageWidth - margin - 2, yPos);
     yPos += 5;
 
     doc.setFont('helvetica', 'normal');
@@ -312,7 +353,7 @@ export default function Facturar() {
       const descLines = doc.splitTextToSize(item.descripcion || '', 80);
       const itemTotal = item.cantidad * item.precio_unitario;
       
-      doc.text(descLines, margin, yPos);
+      doc.text(descLines, margin + 2, yPos);
       doc.text(item.cantidad.toString(), margin + 100, yPos);
       doc.text(formatCurrency(item.precio_unitario), margin + 120, yPos);
       doc.text(formatCurrency(itemTotal), margin + 160, yPos, { align: 'right' });
@@ -321,7 +362,7 @@ export default function Facturar() {
     });
 
     yPos += 5;
-    doc.line(margin, yPos, pageWidth - margin, yPos);
+    doc.line(margin + 2, yPos, pageWidth - margin - 2, yPos);
     yPos += 10;
 
     // Totales
