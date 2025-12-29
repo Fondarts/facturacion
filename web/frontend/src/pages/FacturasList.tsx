@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, Plus, Search, Trash2, Edit, Filter } from 'lucide-react';
+import { FileText, Plus, Search, Trash2, Edit, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { getFacturas, deleteFactura } from '../api';
 import { Factura } from '../types';
+
+interface MonthGroup {
+  month: string;
+  monthName: string;
+  facturas: Factura[];
+  total: number;
+  iva: number;
+}
 
 export default function FacturasList() {
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'todas' | 'recibida' | 'generada'>('todas');
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadFacturas();
@@ -18,6 +27,13 @@ export default function FacturasList() {
     try {
       const data = await getFacturas();
       setFacturas(data);
+      // Expandir el primer mes por defecto
+      if (data.length > 0) {
+        const firstMonth = data[0]?.fecha?.substring(0, 7);
+        if (firstMonth) {
+          setExpandedMonths(new Set([firstMonth]));
+        }
+      }
     } catch (error) {
       console.error('Error loading facturas:', error);
     } finally {
@@ -36,12 +52,47 @@ export default function FacturasList() {
     }
   }
 
+  const toggleMonth = (month: string) => {
+    const newExpanded = new Set(expandedMonths);
+    if (newExpanded.has(month)) {
+      newExpanded.delete(month);
+    } else {
+      newExpanded.add(month);
+    }
+    setExpandedMonths(newExpanded);
+  };
+
   const filteredFacturas = facturas.filter(f => {
     const matchesSearch = f.establecimiento?.toLowerCase().includes(search.toLowerCase()) ||
                          f.concepto?.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'todas' || f.tipo === filter;
     return matchesSearch && matchesFilter;
   });
+
+  // Agrupar facturas por mes
+  const groupedByMonth: MonthGroup[] = filteredFacturas.reduce((groups: MonthGroup[], factura) => {
+    const month = factura.fecha?.substring(0, 7) || 'unknown';
+    let group = groups.find(g => g.month === month);
+    
+    if (!group) {
+      const date = new Date(factura.fecha + 'T00:00:00');
+      const monthName = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      group = { 
+        month, 
+        monthName: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+        facturas: [], 
+        total: 0, 
+        iva: 0 
+      };
+      groups.push(group);
+    }
+    
+    group.facturas.push(factura);
+    group.total += factura.total || 0;
+    group.iva += factura.iva || 0;
+    
+    return groups;
+  }, []).sort((a, b) => b.month.localeCompare(a.month));
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
@@ -119,8 +170,8 @@ export default function FacturasList() {
         </div>
       </div>
 
-      {/* Facturas grid */}
-      {filteredFacturas.length === 0 ? (
+      {/* Facturas agrupadas por mes */}
+      {groupedByMonth.length === 0 ? (
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-12 border border-slate-700/50 text-center">
           <FileText className="mx-auto text-slate-600 mb-4" size={48} />
           <p className="text-slate-400 mb-4">
@@ -135,62 +186,95 @@ export default function FacturasList() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {filteredFacturas.map((factura) => (
-            <div
-              key={factura.id}
-              className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 backdrop-blur-sm hover:border-slate-600/50 transition-all group"
-            >
-              <div className="flex items-center justify-between">
+        <div className="space-y-4">
+          {groupedByMonth.map((group) => (
+            <div key={group.month} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 overflow-hidden">
+              {/* Month Header - Clickable */}
+              <button
+                onClick={() => toggleMonth(group.month)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-700/20 transition-colors"
+              >
                 <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                    factura.tipo === 'generada' 
-                      ? 'bg-amber-500/20 text-amber-400' 
-                      : 'bg-emerald-500/20 text-emerald-400'
-                  }`}>
-                    <FileText size={24} />
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                    <Calendar className="text-emerald-400" size={20} />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-white text-lg">{factura.establecimiento || 'Sin nombre'}</h3>
-                    <p className="text-slate-400 text-sm">
-                      {new Date(factura.fecha).toLocaleDateString('es-ES', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                    </p>
-                    {factura.concepto && (
-                      <p className="text-slate-500 text-sm mt-1">{factura.concepto}</p>
-                    )}
+                  <div className="text-left">
+                    <h2 className="text-xl font-bold text-white">{group.monthName}</h2>
+                    <p className="text-slate-400 text-sm">{group.facturas.length} factura{group.facturas.length !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-white">{formatCurrency(factura.total)}</p>
-                    <div className="flex gap-4 text-sm text-slate-400">
-                      <span>Base: {formatCurrency(factura.subtotal)}</span>
-                      <span>IVA: {formatCurrency(factura.iva)}</span>
-                    </div>
+                    <p className="text-2xl font-bold text-emerald-400">{formatCurrency(group.total)}</p>
+                    <p className="text-slate-400 text-sm">IVA: {formatCurrency(group.iva)}</p>
                   </div>
-                  
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Link
-                      to={`/facturas/${factura.id}`}
-                      className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors"
-                    >
-                      <Edit size={18} />
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(factura.id)}
-                      className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+                  {expandedMonths.has(group.month) ? (
+                    <ChevronDown className="text-slate-400" size={24} />
+                  ) : (
+                    <ChevronRight className="text-slate-400" size={24} />
+                  )}
                 </div>
-              </div>
+              </button>
+              
+              {/* Month Content - Expandable */}
+              {expandedMonths.has(group.month) && (
+                <div className="border-t border-slate-700/50">
+                  {group.facturas.map((factura, index) => (
+                    <div
+                      key={factura.id}
+                      className={`px-6 py-4 flex items-center justify-between hover:bg-slate-700/20 transition-colors group ${
+                        index !== group.facturas.length - 1 ? 'border-b border-slate-700/30' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                          factura.tipo === 'generada' 
+                            ? 'bg-amber-500/20 text-amber-400' 
+                            : 'bg-slate-700/50 text-slate-400'
+                        }`}>
+                          <FileText size={20} />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-white">{factura.establecimiento || 'Sin nombre'}</h3>
+                          <p className="text-slate-500 text-sm">
+                            {new Date(factura.fecha + 'T00:00:00').toLocaleDateString('es-ES', { 
+                              weekday: 'short', 
+                              day: 'numeric' 
+                            })}
+                            {factura.concepto && ` • ${factura.concepto}`}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-white">{formatCurrency(factura.total)}</p>
+                          <div className="flex gap-3 text-xs text-slate-500">
+                            <span>Base: {formatCurrency(factura.subtotal)}</span>
+                            <span>IVA: {formatCurrency(factura.iva)}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link
+                            to={`/facturas/${factura.id}`}
+                            className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors"
+                          >
+                            <Edit size={16} />
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(factura.id)}
+                            className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -198,4 +282,3 @@ export default function FacturasList() {
     </div>
   );
 }
-

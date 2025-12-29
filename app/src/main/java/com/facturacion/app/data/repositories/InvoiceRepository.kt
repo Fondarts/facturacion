@@ -6,6 +6,7 @@ import com.facturacion.app.domain.models.Category
 import com.facturacion.app.domain.models.Invoice
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import java.util.Date
 
 class InvoiceRepository(
@@ -13,8 +14,7 @@ class InvoiceRepository(
     private val categoryDao: CategoryDao? = null
 ) {
     fun getAllInvoices(): Flow<List<Invoice>> {
-        val categoriesFlow = categoryDao?.getAllCategories() 
-            ?: kotlinx.coroutines.flow.flowOf(emptyList())
+        val categoriesFlow = categoryDao?.getAllCategories() ?: flowOf(emptyList())
         return combine(
             invoiceDao.getAllInvoices(),
             categoriesFlow
@@ -30,14 +30,15 @@ class InvoiceRepository(
     
     suspend fun getInvoiceById(id: Long): Invoice? {
         val invoice = invoiceDao.getInvoiceById(id) ?: return null
-        val category = invoice.categoryId?.let { categoryDao.getCategoryById(it)?.let { Category.fromEntity(it) } }
+        val category = invoice.categoryId?.let { categoryDao?.getCategoryById(it)?.let { Category.fromEntity(it) } }
         return Invoice.fromEntity(invoice, category)
     }
     
     fun getInvoicesByMonth(monthYear: String): Flow<List<Invoice>> {
+        val categoriesFlow = categoryDao?.getAllCategories() ?: flowOf(emptyList())
         return combine(
             invoiceDao.getInvoicesByMonth(monthYear),
-            categoryDao.getAllCategories()
+            categoriesFlow
         ) { invoices, categories ->
             invoices.map { invoice ->
                 val category = invoice.categoryId?.let { catId ->
@@ -49,9 +50,10 @@ class InvoiceRepository(
     }
     
     fun getInvoicesByDateRange(startDate: Date, endDate: Date): Flow<List<Invoice>> {
+        val categoriesFlow = categoryDao?.getAllCategories() ?: flowOf(emptyList())
         return combine(
             invoiceDao.getInvoicesByDateRange(startDate, endDate),
-            categoryDao.getAllCategories()
+            categoriesFlow
         ) { invoices, categories ->
             invoices.map { invoice ->
                 val category = invoice.categoryId?.let { catId ->
@@ -63,9 +65,10 @@ class InvoiceRepository(
     }
     
     fun searchInvoices(query: String): Flow<List<Invoice>> {
+        val categoriesFlow = categoryDao?.getAllCategories() ?: flowOf(emptyList())
         return combine(
             invoiceDao.searchInvoices(query),
-            categoryDao.getAllCategories()
+            categoriesFlow
         ) { invoices, categories ->
             invoices.map { invoice ->
                 val category = invoice.categoryId?.let { catId ->
@@ -82,9 +85,10 @@ class InvoiceRepository(
         startDate: Date?,
         endDate: Date?
     ): Flow<List<Invoice>> {
+        val categoriesFlow = categoryDao?.getAllCategories() ?: flowOf(emptyList())
         return combine(
             invoiceDao.filterInvoices(query, categoryId, startDate, endDate),
-            categoryDao.getAllCategories()
+            categoriesFlow
         ) { invoices, categories ->
             invoices.map { invoice ->
                 val category = invoice.categoryId?.let { catId ->
@@ -162,7 +166,3 @@ class InvoiceRepository(
         return Invoice.fromEntity(entity, category)
     }
 }
-
-
-
-
