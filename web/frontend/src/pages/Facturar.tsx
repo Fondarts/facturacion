@@ -352,13 +352,23 @@ export default function Facturar() {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    items.forEach((item) => {
+    let itemYPos = yPos; // Guardar posición inicial de items
+    items.forEach((item, index) => {
       if (yPos > 250) {
         doc.addPage();
         yPos = margin;
+        itemYPos = yPos;
       }
       
       const descLines = doc.splitTextToSize(item.descripcion || '', 80);
+      const itemHeight = Math.max(descLines.length * 5, 8);
+      
+      // Dibujar fondo más oscuro para filas pares (índice 1, 3, 5...)
+      if (index % 2 === 1) {
+        doc.setFillColor(230, 230, 230); // Gris más oscuro que el fondo general
+        doc.rect(0, yPos - itemHeight + 2, pageWidth, itemHeight, 'F');
+      }
+      
       const itemTotal = item.cantidad * item.precio_unitario;
       
       doc.text(descLines, margin + 2, yPos);
@@ -366,7 +376,7 @@ export default function Facturar() {
       doc.text(formatCurrency(item.precio_unitario), margin + 120, yPos);
       doc.text(formatCurrency(itemTotal), margin + 160, yPos, { align: 'right' });
       
-      yPos += Math.max(descLines.length * 5, 8);
+      yPos += itemHeight;
     });
 
     yPos += 5;
