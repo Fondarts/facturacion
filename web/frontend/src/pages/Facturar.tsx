@@ -79,6 +79,19 @@ export default function Facturar() {
     loadInitialData();
   }, []);
 
+  // Cerrar dropdowns al hacer click fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.dropdown-container')) {
+        setShowClienteDropdown(false);
+        setShowEmisorDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Calcular totales
   const subtotal = items.reduce((sum, item) => sum + (item.cantidad * item.precio_unitario), 0);
   const iva = subtotal * (formData.tasa_iva / 100);
@@ -215,17 +228,6 @@ export default function Facturar() {
     doc.text(clienteLines, margin, yPos);
     yPos += clienteLines.length * 7 + 10;
 
-    // Concepto
-    if (formData.concepto) {
-      doc.setFont('helvetica', 'bold');
-      doc.text('CONCEPTO:', margin, yPos);
-      yPos += 7;
-      doc.setFont('helvetica', 'normal');
-      const conceptoLines = doc.splitTextToSize(formData.concepto, pageWidth - 2 * margin);
-      doc.text(conceptoLines, margin, yPos);
-      yPos += conceptoLines.length * 7 + 10;
-    }
-
     // Tabla de items
     yPos += 5;
     doc.setFont('helvetica', 'bold');
@@ -298,7 +300,7 @@ export default function Facturar() {
       const data = new FormData();
       data.append('establecimiento', formData.cliente.split('\n')[0] || formData.cliente);
       data.append('fecha', formData.fecha);
-      data.append('concepto', `FAC-${numeroFactura.toString().padStart(4, '0')} - ${formData.concepto || 'Factura generada'}`);
+      data.append('concepto', `FAC-${numeroFactura.toString().padStart(4, '0')} - Factura generada`);
       data.append('subtotal', subtotal.toString());
       data.append('tasa_iva', (formData.tasa_iva / 100).toString());
       data.append('iva', iva.toString());
@@ -423,7 +425,7 @@ export default function Facturar() {
               <Building2 size={20} className="text-amber-400" />
               From (Emisor)
             </h2>
-            <div className="relative">
+            <div className="relative dropdown-container">
               <button
                 type="button"
                 onClick={() => setShowEmisorDropdown(!showEmisorDropdown)}
@@ -479,7 +481,7 @@ export default function Facturar() {
               <User size={20} className="text-amber-400" />
               Cliente
             </h2>
-            <div className="relative">
+            <div className="relative dropdown-container">
               <button
                 type="button"
                 onClick={() => setShowClienteDropdown(!showClienteDropdown)}
@@ -527,20 +529,6 @@ export default function Facturar() {
           >
             Guardar este cliente
           </button>
-        </div>
-
-        {/* Concepto */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Concepto
-          </label>
-          <input
-            type="text"
-            value={formData.concepto}
-            onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
-            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-            placeholder="Descripción general de la factura"
-          />
         </div>
 
         {/* Items */}
