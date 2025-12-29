@@ -315,13 +315,12 @@ export default function Facturar() {
 
     // Tabla de items con fondo sombreado (incluyendo totales)
     yPos += 5;
-    const tableStartY = yPos - 3;
-    const paddingTop = 3; // Padding arriba
-    const paddingBottom = 3; // Padding abajo
+    const paddingTop = 5; // Padding arriba (más espacio antes de DESCRIPTION)
+    const tableStartY = yPos - paddingTop; // Empezar el fondo antes del texto
     
     // Calcular altura total de la tabla (items + totales)
     let tableHeight = paddingTop; // Padding arriba
-    tableHeight += 7; // Header
+    tableHeight += 7; // Header (DESCRIPTION, QTY, etc.)
     items.forEach((item) => {
       const descLines = doc.splitTextToSize(item.descripcion || '', 80);
       tableHeight += Math.max(descLines.length * 5, 8);
@@ -332,7 +331,7 @@ export default function Facturar() {
     tableHeight += 7; // Subtotal
     tableHeight += 7; // IVA
     tableHeight += 7; // TOTAL
-    tableHeight += paddingBottom; // Padding abajo
+    // Sin padding abajo - corta justo después de TOTAL
     
     // Dibujar rectángulo sombreado de fondo primero (hasta los bordes laterales)
     doc.setFillColor(240, 240, 240); // Gris claro
