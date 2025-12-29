@@ -154,6 +154,94 @@ app.get('/api/stats', (req, res) => {
   }
 });
 
+// ==================== SINCRONIZACIÓN CON APP ANDROID ====================
+
+// Sincronizar facturas desde Android (recibe array de facturas)
+app.post('/api/sync', (req, res) => {
+  try {
+    const { facturas } = req.body;
+    
+    if (!Array.isArray(facturas)) {
+      return res.status(400).json({ error: 'Se esperaba un array de facturas' });
+    }
+    
+    const results = {
+      created: 0,
+      updated: 0,
+      errors: []
+    };
+    
+    const insertStmt = db.prepare(`
+      INSERT INTO facturas (id, establecimiento, fecha, total, subtotal, iva, tasa_iva, concepto, archivo, tipo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const updateStmt = db.prepare(`
+      UPDATE facturas 
+      SET establecimiento = ?, fecha = ?, total = ?, subtotal = ?, iva = ?, tasa_iva = ?, concepto = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    
+    const checkStmt = db.prepare('SELECT id FROM facturas WHERE id = ?');
+    
+    for (const factura of facturas) {
+      try {
+        const existing = checkStmt.get(factura.id);
+        
+        if (existing) {
+          // Actualizar
+          updateStmt.run(
+            factura.establecimiento,
+            factura.fecha,
+            factura.total,
+            factura.subtotal,
+            factura.iva,
+            factura.tasa_iva,
+            factura.concepto || factura.notes,
+            factura.id
+          );
+          results.updated++;
+        } else {
+          // Crear nueva
+          insertStmt.run(
+            factura.id,
+            factura.establecimiento,
+            factura.fecha,
+            factura.total,
+            factura.subtotal,
+            factura.iva,
+            factura.tasa_iva,
+            factura.concepto || factura.notes,
+            factura.archivo || factura.fileName,
+            'recibida'
+          );
+          results.created++;
+        }
+      } catch (err) {
+        results.errors.push({ id: factura.id, error: err.message });
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Sincronización completada: ${results.created} creadas, ${results.updated} actualizadas`,
+      ...results
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener todas las facturas para sincronización inversa (web -> Android)
+app.get('/api/sync', (req, res) => {
+  try {
+    const facturas = db.prepare('SELECT * FROM facturas ORDER BY fecha DESC').all();
+    res.json({ facturas });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Crear carpeta uploads si no existe
 const fs = require('fs');
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -161,7 +249,9 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-app.listen(PORT, () => {
+// Escuchar en todas las interfaces para permitir conexiones desde la app móvil
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend corriendo en http://localhost:${PORT}`);
+  console.log(`📱 Para conectar desde Android, usa la IP de tu PC en la misma red WiFi`);
 });
 

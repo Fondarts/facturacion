@@ -40,7 +40,8 @@ fun InvoiceListScreen(
     categoryRepository: CategoryRepository,
     onNavigateToAdd: () -> Unit,
     onNavigateToEdit: (Long) -> Unit,
-    onNavigateToPreview: (Long) -> Unit
+    onNavigateToPreview: (Long) -> Unit,
+    onNavigateToSync: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val viewModel: InvoiceViewModel = viewModel(
@@ -82,6 +83,9 @@ fun InvoiceListScreen(
             TopAppBar(
                 title = { Text("Facturas") },
                 actions = {
+                    IconButton(onClick = onNavigateToSync) {
+                        Icon(Icons.Default.Sync, contentDescription = "Sincronizar con Web")
+                    }
                     IconButton(onClick = { showExportDialog = true }) {
                         Icon(Icons.Default.FileDownload, contentDescription = "Exportar")
                     }
