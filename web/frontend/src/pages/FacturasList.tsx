@@ -505,7 +505,7 @@ export default function FacturasList() {
                               <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} />
                             </div>
                           )}
-                          {factura.tipo === 'generada' && (
+                          {factura.tipo === 'generada' ? (
                             <button
                               onClick={() => generatePDFFromFactura(factura)}
                               className="p-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-amber-500/20 hover:text-amber-400 transition-colors opacity-0 group-hover:opacity-100"
@@ -513,6 +513,9 @@ export default function FacturasList() {
                             >
                               <Download size={16} />
                             </button>
+                          ) : (
+                            // Espacio invisible para mantener alineación cuando no hay botón de descargar
+                            <div className="w-[36px] h-[36px] opacity-0 pointer-events-none"></div>
                           )}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Link
