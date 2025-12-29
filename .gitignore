@@ -84,7 +84,8 @@ lint/outputs/
 lint/tmp/
 # lint/reports/
 
-
-
-
+# Web build output
+web/frontend/dist/
+web/frontend/node_modules/
+web/backend/node_modules/
 
