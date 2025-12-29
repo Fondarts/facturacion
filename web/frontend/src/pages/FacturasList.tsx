@@ -212,7 +212,9 @@ export default function FacturasList() {
     doc.text(texts.para, rightX, startY);
     let currentYRight = startY + 7;
     doc.setFont('helvetica', 'normal');
-    const clienteLines = doc.splitTextToSize(factura.establecimiento || texts.sinEspecificar, columnWidth);
+    // Usar cliente completo si existe, sino usar establecimiento
+    const clienteTexto = factura.cliente || factura.establecimiento || texts.sinEspecificar;
+    const clienteLines = doc.splitTextToSize(clienteTexto, columnWidth);
     doc.text(clienteLines, rightX, currentYRight);
     currentYRight += clienteLines.length * 7;
 
@@ -283,7 +285,10 @@ export default function FacturasList() {
     doc.text(formatCurrencyPDF(factura.subtotal), margin + 160, yPos, { align: 'right' });
     yPos += 7;
     
-    doc.text(`${texts.iva} (${(factura.tasa_iva * 100).toFixed(0)}%):`, margin + 100, yPos, { align: 'right' });
+    // Mostrar porcentaje de VAT con decimales si es necesario
+    const vatPercent = factura.tasa_iva ? (factura.tasa_iva * 100) : 0;
+    const vatPercentStr = vatPercent % 1 === 0 ? vatPercent.toFixed(0) : vatPercent.toFixed(1);
+    doc.text(`${texts.iva} (${vatPercentStr}%):`, margin + 100, yPos, { align: 'right' });
     doc.text(formatCurrencyPDF(factura.iva), margin + 160, yPos, { align: 'right' });
     yPos += 7;
     
