@@ -315,7 +315,7 @@ export default function Facturar() {
 
     // Tabla de items con fondo sombreado (incluyendo totales)
     yPos += 5;
-    const paddingTop = 20; // Padding arriba (más espacio antes de DESCRIPTION)
+    const paddingTop = 10; // Padding arriba (más espacio antes de DESCRIPTION)
     const tableStartY = yPos - paddingTop; // Empezar el fondo antes del texto
     
     // Calcular altura total de la tabla (items + totales)
