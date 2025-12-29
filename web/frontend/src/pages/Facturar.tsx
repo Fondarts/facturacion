@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, Loader2, FileText, Download, User, Building2, ChevronDown } from 'lucide-react';
-import { createFactura, getClientes, getEmisores, getUltimoCliente, getUltimoEmisor, saveCliente, saveEmisor, updateClienteUso, updateEmisorUso, ClienteData, EmisorData } from '../api';
+import { createFactura, getClientes, getEmisores, getUltimoCliente, getUltimoEmisor, saveCliente, saveEmisor, updateClienteUso, updateEmisorUso, deleteCliente, deleteEmisor, ClienteData, EmisorData } from '../api';
 import { FacturaItem } from '../types';
 import jsPDF from 'jspdf';
 
@@ -125,6 +125,30 @@ export default function Facturar() {
     await saveEmisor({ nombre, datos: formData.from });
     const updated = await getEmisores();
     setEmisores(updated);
+  }
+
+  async function handleDeleteCliente(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm('¿Estás seguro de que quieres eliminar este cliente?')) return;
+    try {
+      await deleteCliente(id);
+      const updated = await getClientes();
+      setClientes(updated);
+    } catch (error) {
+      console.error('Error deleting cliente:', error);
+    }
+  }
+
+  async function handleDeleteEmisor(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm('¿Estás seguro de que quieres eliminar este emisor?')) return;
+    try {
+      await deleteEmisor(id);
+      const updated = await getEmisores();
+      setEmisores(updated);
+    } catch (error) {
+      console.error('Error deleting emisor:', error);
+    }
   }
 
   function formatDate(date: string): string {
@@ -414,15 +438,29 @@ export default function Facturar() {
                     <div className="p-4 text-slate-400 text-sm">No hay emisores guardados</div>
                   ) : (
                     emisores.map((emisor) => (
-                      <button
+                      <div
                         key={emisor.id}
-                        type="button"
-                        onClick={() => selectEmisor(emisor)}
-                        className="w-full text-left p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0"
+                        className="flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0 group"
                       >
-                        <div className="font-medium text-white">{emisor.nombre}</div>
-                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{emisor.datos}</div>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => selectEmisor(emisor)}
+                          className="flex-1 text-left"
+                        >
+                          <div className="font-medium text-white">{emisor.nombre}</div>
+                          <div className="text-xs text-slate-400 mt-1 line-clamp-2">{emisor.datos}</div>
+                        </button>
+                        {emisor.id && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteEmisor(emisor.id!, e)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Eliminar emisor"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>
@@ -470,15 +508,29 @@ export default function Facturar() {
                     <div className="p-4 text-slate-400 text-sm">No hay clientes guardados</div>
                   ) : (
                     clientes.map((cliente) => (
-                      <button
+                      <div
                         key={cliente.id}
-                        type="button"
-                        onClick={() => selectCliente(cliente)}
-                        className="w-full text-left p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0"
+                        className="flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0 group"
                       >
-                        <div className="font-medium text-white">{cliente.nombre}</div>
-                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{cliente.datos}</div>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => selectCliente(cliente)}
+                          className="flex-1 text-left"
+                        >
+                          <div className="font-medium text-white">{cliente.nombre}</div>
+                          <div className="text-xs text-slate-400 mt-1 line-clamp-2">{cliente.datos}</div>
+                        </button>
+                        {cliente.id && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCliente(cliente.id!, e)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Eliminar cliente"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>

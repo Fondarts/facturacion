@@ -210,3 +210,13 @@ export async function getUltimoEmisor(): Promise<EmisorData | null> {
   const doc = querySnapshot.docs[0];
   return { id: doc.id, ...doc.data() } as EmisorData;
 }
+
+export async function deleteCliente(id: string): Promise<void> {
+  const docRef = doc(db, CLIENTES_COLLECTION, id);
+  await deleteDoc(docRef);
+}
+
+export async function deleteEmisor(id: string): Promise<void> {
+  const docRef = doc(db, EMISORES_COLLECTION, id);
+  await deleteDoc(docRef);
+}
