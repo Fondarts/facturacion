@@ -87,7 +87,13 @@ object InvoiceParser {
             "FORMA DE PAGO", "TARJETA", "EFECTIVO", "CAMBIO", "ENTREGADO",
             "GRACIAS", "ATENDIDO", "COMENSALES", "UNID", "DESCRIPCION", "PRECIO",
             "PRODUCTO", "CONCEPTO", "CANTIDAD", "€", "\\d{5,}", "\\d+[,.]\\d{2}\\s*€?",
-            "OBSERVACIONES", "METODO", "PAGO", "ENTREGA", "ALBARAN", "EAN"
+            "OBSERVACIONES", "METODO", "PAGO", "ENTREGA", "ALBARAN", "EAN",
+            "\\.PDF", "\\.pdf", "^EMPRESA$", "^PIOTTA$"  // Filtrar nombres de archivo y etiquetas genéricas
+        )
+        
+        // Palabras exactas que son etiquetas, no nombres de negocio
+        val exactExcludedWords = listOf(
+            "EMPRESA", "CLIENTE", "FACTURA", "PIOTTA"  // "PIOTTA" solo es nombre si está seguido de algo
         )
         
         // Ciudades españolas comunes que NO son establecimientos
@@ -109,8 +115,14 @@ object InvoiceParser {
             "\\d{5}.*VALENCIA"
         )
         
-        // Patrones que indican nombre de empresa
-        val companyIndicators = listOf("S\\.?L\\.?", "S\\.?A\\.?", "S\\.?L\\.?U\\.?", "S\\.?A\\.?U\\.?")
+        // Patrones que indican nombre de empresa (deben estar al final o separados)
+        // Usamos word boundaries o espacios/puntuación para evitar falsos positivos como "EMPRESA"
+        val companyIndicators = listOf(
+            "\\bS\\.?L\\.?\\b",     // S.L., SL al final de palabra
+            "\\bS\\.?A\\.?\\b",     // S.A., SA al final de palabra (no matchea "EMPRESA")
+            "\\bS\\.?L\\.?U\\.?\\b", // S.L.U.
+            "\\bS\\.?A\\.?U\\.?\\b"  // S.A.U.
+        )
         
         // Primera pasada: buscar líneas con indicadores de empresa (más confiable)
         for (i in 0 until minOf(15, lines.size)) {
@@ -118,6 +130,9 @@ object InvoiceParser {
             val upperLine = line.uppercase()
             
             if (line.length < 3 || line.length > 80) continue
+            
+            // Saltar nombres de archivo PDF
+            if (line.lowercase().contains(".pdf")) continue
             
             val hasCompanyIndicator = companyIndicators.any { 
                 upperLine.contains(Regex(it, RegexOption.IGNORE_CASE)) 
@@ -134,13 +149,19 @@ object InvoiceParser {
         // Segunda pasada: buscar nombre comercial (línea corta con letras, no ciudad)
         for (i in 0 until minOf(10, lines.size)) {
             val line = lines[i]
-            val upperLine = line.uppercase()
+            val upperLine = line.uppercase().trim()
             
             // Saltar líneas muy cortas o muy largas
             if (line.length < 3 || line.length > 50) continue
             
+            // Saltar líneas que contienen ".pdf" (nombres de archivo)
+            if (line.lowercase().contains(".pdf")) continue
+            
+            // Saltar palabras exactas que son etiquetas genéricas
+            if (exactExcludedWords.any { upperLine == it }) continue
+            
             // Saltar si es una ciudad española (exacta o contiene)
-            if (spanishCities.any { upperLine.trim() == it || upperLine.startsWith("$it ") || upperLine.startsWith("$it,") }) continue
+            if (spanishCities.any { upperLine == it || upperLine.startsWith("$it ") || upperLine.startsWith("$it,") }) continue
             
             // Saltar si contiene DONOSTIA o SAN SEBASTIAN (con o sin código postal)
             if (upperLine.contains("DONOSTIA") || upperLine.contains("SAN SEBASTIAN")) continue

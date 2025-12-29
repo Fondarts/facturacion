@@ -379,12 +379,12 @@ Tarjeta bancaria 12/04/2025 13:15 49.00
 
     @Test
     fun testPiottaPdfOCR() {
-        // Texto extraído de PDF donde las etiquetas están separadas de los valores
+        // Texto REAL extraído por OCR (proporcionado por usuario)
+        // Problema: "EmpresaFactura19722.pdf" se pegó y "Empresa" se detectaba como establecimiento
         val text = """
-PIOTTA
-Empresa
+EmpresaFactura19722.pdf
 PIOTTA ROMANA
-B44922904Factura19722.pdf
+B44922904
 Calle de Ponzano, 93
 Madrid 28003
 Cliente
@@ -392,16 +392,31 @@ Federico Ondarts
 Z0641643V
 Calle de Melchor Fernández Almagro 10
 Madrid 28029
-Suma:
-Descuento:
-Subtotal:
-Impuesto:
-Total:
-87,50 €
-0.00 €
-79,55 €
-7,95 €
-87,50 €
+Factura 
+Factura Nº: #19722
+Fecha: domingo, 7 de diciembre de 2025 22:22
+NOMBRE PRECIO TOTAL
+1 Agua Vilas del Turbon 3,50 € 3,50 €
+1 Aquarius Limon 3,50 € 3,50 €
+2 Coca Cola Zero 3,50 € 7,00 €
+1 Peroni Nastro Azzurro Pinta 6,00 € 6,00 €
+1 Piotta 15,00 € 15,00 €
+2 Ariccia 14,00 € 28,00 €
+1 Regina 12,00 € 12,00 €
+1 Cannoli 6,00 € 6,00 €
+1 Pizza di Nutella 6,50 € 6,50 €
+Grupo analítico Total
+BEBIDA 20,00 €
+COMIDA 67,50 €
+IMPUESTO SUBTOTAL IMPUESTO TOTAL
+10.00 % 79,55 € 7,95 €
+IMPORTE FORMA DE PAGO CAMBIO PROPINA FECHA
+87,50 € Tarjeta 0,00 € 0,00 € domingo, 7 de diciembre de 2025 22:22
+Suma: 87,50 €
+Descuento: 0,00 €
+Subtotal: 79,55 €
+Impuesto: 7,95 €
+Total: 87,50 €
         """.trimIndent()
 
         val result = InvoiceParser.parse(text)
@@ -415,6 +430,7 @@ Total:
         println("Confianza: ${result.confidence}")
 
         assertNotNull("Establecimiento no detectado", result.establishment)
+        assertEquals("Establecimiento incorrecto", "PIOTTA ROMANA", result.establishment)
         
         // Valores esperados:
         // Total: 87,50
