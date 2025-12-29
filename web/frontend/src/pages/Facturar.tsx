@@ -324,10 +324,16 @@ export default function Facturar() {
       tableHeight += Math.max(descLines.length * 5, 8);
     });
     tableHeight += 5; // Espacio después de items
+    tableHeight += 7; // Línea separadora
+    tableHeight += 10; // Espacio antes de totales
     tableHeight += 7; // Subtotal
     tableHeight += 7; // IVA
     tableHeight += 7; // TOTAL
     tableHeight += 3; // Espacio final
+    
+    // Dibujar rectángulo sombreado de fondo primero
+    doc.setFillColor(240, 240, 240); // Gris claro
+    doc.roundedRect(margin, tableStartY, pageWidth - 2 * margin, tableHeight, 2, 2, 'F');
     
     // Headers
     doc.setFont('helvetica', 'bold');
@@ -350,60 +356,6 @@ export default function Facturar() {
         yPos = margin;
       }
       
-      const descLines = doc.splitTextToSize(item.descripcion || '', 80);
-      const itemTotal = item.cantidad * item.precio_unitario;
-      
-      doc.text(descLines, margin + 2, yPos);
-      doc.text(item.cantidad.toString(), margin + 100, yPos);
-      doc.text(formatCurrency(item.precio_unitario), margin + 120, yPos);
-      doc.text(formatCurrency(itemTotal), margin + 160, yPos, { align: 'right' });
-      
-      yPos += Math.max(descLines.length * 5, 8);
-    });
-
-    yPos += 5;
-    doc.line(margin + 2, yPos, pageWidth - margin - 2, yPos);
-    yPos += 10;
-
-    // Totales
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(`${texts.subtotal}`, margin + 100, yPos, { align: 'right' });
-    doc.text(formatCurrency(subtotal), margin + 160, yPos, { align: 'right' });
-    yPos += 7;
-    
-    doc.text(`${texts.iva} (${formData.tasa_iva}%):`, margin + 100, yPos, { align: 'right' });
-    doc.text(formatCurrency(iva), margin + 160, yPos, { align: 'right' });
-    yPos += 7;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(`${texts.totalFinal}`, margin + 100, yPos, { align: 'right' });
-    doc.text(formatCurrency(total), margin + 160, yPos, { align: 'right' });
-    
-    // Dibujar rectángulo sombreado de fondo (después de calcular todas las posiciones)
-    doc.setFillColor(240, 240, 240); // Gris claro
-    doc.roundedRect(margin, tableStartY, pageWidth - 2 * margin, tableHeight, 2, 2, 'F');
-    
-    // Volver a dibujar el texto encima del fondo (para que se vea)
-    yPos = tableStartY + 3;
-    
-    // Headers
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.text(texts.descripcion, margin + 2, yPos);
-    doc.text(texts.cantidad, margin + 100, yPos);
-    doc.text(texts.precio, margin + 120, yPos);
-    doc.text(texts.total, margin + 160, yPos, { align: 'right' });
-    yPos += 7;
-    
-    doc.line(margin + 2, yPos, pageWidth - margin - 2, yPos);
-    yPos += 5;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    items.forEach((item) => {
       const descLines = doc.splitTextToSize(item.descripcion || '', 80);
       const itemTotal = item.cantidad * item.precio_unitario;
       
