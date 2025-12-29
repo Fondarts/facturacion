@@ -7,6 +7,7 @@ import jsPDF from 'jspdf';
 
 type Moneda = 'EUR' | 'USD' | 'GBP';
 type FormatoFecha = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD-MM-YYYY';
+type Idioma = 'es' | 'en';
 
 export default function Facturar() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function Facturar() {
     tasa_iva: 0,
     moneda: 'EUR' as Moneda,
     formatoFecha: 'DD/MM/YYYY' as FormatoFecha,
+    idioma: 'es' as Idioma,
   });
   
   const [items, setItems] = useState<FacturaItem[]>([
@@ -192,58 +194,108 @@ export default function Facturar() {
     return symbols[formData.moneda];
   }
 
+  function getTexts(idioma: Idioma) {
+    if (idioma === 'en') {
+      return {
+        factura: 'INVOICE',
+        numeroFactura: 'INVOICE NO:',
+        fecha: 'DATE:',
+        de: 'FROM:',
+        para: 'TO:',
+        descripcion: 'DESCRIPTION',
+        cantidad: 'QTY',
+        precio: 'PRICE',
+        total: 'TOTAL',
+        subtotal: 'Subtotal:',
+        iva: 'VAT',
+        totalFinal: 'TOTAL:',
+        sinNumero: 'No number',
+        sinEspecificar: 'Not specified'
+      };
+    }
+    return {
+      factura: 'FACTURA',
+      numeroFactura: 'Nº FACTURA:',
+      fecha: 'FECHA:',
+      de: 'DE:',
+      para: 'PARA:',
+      descripcion: 'DESCRIPCIÓN',
+      cantidad: 'CANT.',
+      precio: 'PRECIO',
+      total: 'TOTAL',
+      subtotal: 'Subtotal:',
+      iva: 'IVA',
+      totalFinal: 'TOTAL:',
+      sinNumero: 'Sin número',
+      sinEspecificar: 'Sin especificar'
+    };
+  }
+
   function exportToPDF() {
     const doc = new jsPDF();
+    const texts = getTexts(formData.idioma);
     
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
+    const columnWidth = (pageWidth - 2 * margin - 20) / 2; // Ancho de cada columna con espacio entre ellas
     let yPos = margin;
 
     // Título
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text('FACTURA', pageWidth / 2, yPos, { align: 'center' });
+    doc.text(texts.factura, pageWidth / 2, yPos, { align: 'center' });
     yPos += 15;
 
     // Número de factura
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Nº FACTURA: ${numeroFactura || 'Sin número'}`, margin, yPos);
+    doc.text(`${texts.numeroFactura} ${numeroFactura || texts.sinNumero}`, margin, yPos);
     yPos += 10;
 
     // Fecha
-    doc.text(`FECHA: ${formatDate(formData.fecha)}`, margin, yPos);
+    doc.text(`${texts.fecha} ${formatDate(formData.fecha)}`, margin, yPos);
     yPos += 15;
 
-    // From (Emisor)
+    // DE y PARA en dos columnas
+    const leftX = margin;
+    const rightX = margin + columnWidth + 20;
+    const startY = yPos;
+
+    // Columna izquierda: DE
+    doc.setFont('helvetica', 'bold');
+    doc.text(texts.de, leftX, startY);
+    let currentY = startY + 7;
+    doc.setFont('helvetica', 'normal');
     if (formData.from) {
-      doc.setFont('helvetica', 'bold');
-      doc.text('DE:', margin, yPos);
-      yPos += 7;
-      doc.setFont('helvetica', 'normal');
-      const fromLines = doc.splitTextToSize(formData.from, pageWidth - 2 * margin);
-      doc.text(fromLines, margin, yPos);
-      yPos += fromLines.length * 7 + 10;
+      const fromLines = doc.splitTextToSize(formData.from, columnWidth);
+      doc.text(fromLines, leftX, currentY);
+      currentY += fromLines.length * 7;
+    } else {
+      doc.text(texts.sinEspecificar, leftX, currentY);
+      currentY += 7;
     }
 
-    // Cliente
+    // Columna derecha: PARA
     doc.setFont('helvetica', 'bold');
-    doc.text('PARA:', margin, yPos);
-    yPos += 7;
+    doc.text(texts.para, rightX, startY);
+    let currentYRight = startY + 7;
     doc.setFont('helvetica', 'normal');
-    const clienteLines = doc.splitTextToSize(formData.cliente || 'Sin especificar', pageWidth - 2 * margin);
-    doc.text(clienteLines, margin, yPos);
-    yPos += clienteLines.length * 7 + 10;
+    const clienteLines = doc.splitTextToSize(formData.cliente || texts.sinEspecificar, columnWidth);
+    doc.text(clienteLines, rightX, currentYRight);
+    currentYRight += clienteLines.length * 7;
+
+    // Avanzar yPos al máximo de las dos columnas
+    yPos = Math.max(currentY, currentYRight) + 10;
 
     // Tabla de items
     yPos += 5;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     
-    doc.text('DESCRIPCIÓN', margin, yPos);
-    doc.text('CANT.', margin + 100, yPos);
-    doc.text('PRECIO', margin + 120, yPos);
-    doc.text('TOTAL', margin + 160, yPos, { align: 'right' });
+    doc.text(texts.descripcion, margin, yPos);
+    doc.text(texts.cantidad, margin + 100, yPos);
+    doc.text(texts.precio, margin + 120, yPos);
+    doc.text(texts.total, margin + 160, yPos, { align: 'right' });
     yPos += 7;
     
     doc.line(margin, yPos, pageWidth - margin, yPos);
@@ -275,17 +327,17 @@ export default function Facturar() {
     // Totales
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Subtotal:`, margin + 100, yPos, { align: 'right' });
+    doc.text(`${texts.subtotal}`, margin + 100, yPos, { align: 'right' });
     doc.text(formatCurrency(subtotal), margin + 160, yPos, { align: 'right' });
     yPos += 7;
     
-    doc.text(`IVA (${formData.tasa_iva}%):`, margin + 100, yPos, { align: 'right' });
+    doc.text(`${texts.iva} (${formData.tasa_iva}%):`, margin + 100, yPos, { align: 'right' });
     doc.text(formatCurrency(iva), margin + 160, yPos, { align: 'right' });
     yPos += 7;
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text(`TOTAL:`, margin + 100, yPos, { align: 'right' });
+    doc.text(`${texts.totalFinal}`, margin + 100, yPos, { align: 'right' });
     doc.text(formatCurrency(total), margin + 160, yPos, { align: 'right' });
 
     doc.save(`FACTURA-${numeroFactura || 'sin-numero'}.pdf`);
@@ -350,7 +402,7 @@ export default function Facturar() {
             Configuración
           </h2>
           
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             {/* Número de factura */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -395,6 +447,21 @@ export default function Facturar() {
                 <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                 <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                 <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+              </select>
+            </div>
+
+            {/* Idioma */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Idioma
+              </label>
+              <select
+                value={formData.idioma}
+                onChange={(e) => setFormData({ ...formData, idioma: e.target.value as Idioma })}
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              >
+                <option value="es">Español</option>
+                <option value="en">English</option>
               </select>
             </div>
           </div>
