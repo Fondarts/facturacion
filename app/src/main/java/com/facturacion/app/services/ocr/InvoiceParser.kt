@@ -86,19 +86,51 @@ object InvoiceParser {
             "CLIENTE", "MESA", "VENDEDOR", "HORA", "TELEFONO", "TEL\\.", "TLF",
             "FORMA DE PAGO", "TARJETA", "EFECTIVO", "CAMBIO", "ENTREGADO",
             "GRACIAS", "ATENDIDO", "COMENSALES", "UNID", "DESCRIPCION", "PRECIO",
-            "PRODUCTO", "CONCEPTO", "CANTIDAD", "€", "\\d{5,}", "\\d+[,.]\\d{2}\\s*€?"
+            "PRODUCTO", "CONCEPTO", "CANTIDAD", "€", "\\d{5,}", "\\d+[,.]\\d{2}\\s*€?",
+            "OBSERVACIONES", "METODO", "PAGO", "ENTREGA", "ALBARAN", "EAN"
+        )
+        
+        // Ciudades españolas comunes que NO son establecimientos
+        val spanishCities = listOf(
+            "MADRID", "BARCELONA", "VALENCIA", "SEVILLA", "ZARAGOZA", "MALAGA",
+            "MURCIA", "PALMA", "BILBAO", "ALICANTE", "CORDOBA", "VALLADOLID",
+            "VIGO", "GIJON", "GRANADA", "ELCHE", "OVIEDO", "DONOSTIA", "DONOSTI",
+            "SAN SEBASTIAN", "SANTANDER", "PAMPLONA", "ALMERIA", "BURGOS", "LEON",
+            "SALAMANCA", "ALBACETE", "GETAFE", "ALCALA", "ESPAÑA", "ESPANA"
         )
         
         // Patrones que indican nombre de empresa
-        val companyIndicators = listOf("S\\.?L\\.?", "S\\.?A\\.?", "S\\.?L\\.?U\\.?")
+        val companyIndicators = listOf("S\\.?L\\.?", "S\\.?A\\.?", "S\\.?L\\.?U\\.?", "S\\.?A\\.?U\\.?")
         
-        // Buscar en las primeras 10 líneas
+        // Primera pasada: buscar líneas con indicadores de empresa (más confiable)
+        for (i in 0 until minOf(15, lines.size)) {
+            val line = lines[i]
+            val upperLine = line.uppercase()
+            
+            if (line.length < 3 || line.length > 80) continue
+            
+            val hasCompanyIndicator = companyIndicators.any { 
+                upperLine.contains(Regex(it, RegexOption.IGNORE_CASE)) 
+            }
+            
+            if (hasCompanyIndicator) {
+                // Verificar que no sea solo una dirección
+                if (!upperLine.matches(Regex("^(C/|CALLE|PLAZA|AVDA|AVENIDA|PASEO).*"))) {
+                    return line
+                }
+            }
+        }
+        
+        // Segunda pasada: buscar nombre comercial (línea corta con letras, no ciudad)
         for (i in 0 until minOf(10, lines.size)) {
             val line = lines[i]
             val upperLine = line.uppercase()
             
             // Saltar líneas muy cortas o muy largas
-            if (line.length < 3 || line.length > 80) continue
+            if (line.length < 3 || line.length > 50) continue
+            
+            // Saltar si es una ciudad española
+            if (spanishCities.any { upperLine.trim() == it || upperLine.contains("$it ") }) continue
             
             // Saltar si contiene patrones excluidos
             val isExcluded = excludedPatterns.any { pattern ->
@@ -111,20 +143,13 @@ object InvoiceParser {
             val digitCount = line.count { it.isDigit() }
             if (digitCount > letterCount) continue
             
-            // Saltar direcciones (empiezan con C/, Calle, Plaza, etc.)
-            if (upperLine.matches(Regex("^(C/|CALLE|PLAZA|AVDA|AVENIDA|PASEO).*"))) continue
+            // Saltar direcciones
+            if (upperLine.matches(Regex("^(C/|CALLE|PLAZA|AVDA|AVENIDA|PASEO|\\d{5}).*"))) continue
             
-            // Priorizar líneas que contienen indicadores de empresa
-            val hasCompanyIndicator = companyIndicators.any { 
-                upperLine.contains(Regex(it, RegexOption.IGNORE_CASE)) 
-            }
+            // Saltar códigos postales y líneas que son solo números con ciudad
+            if (upperLine.matches(Regex("^\\d{5}.*"))) continue
             
-            // Si tiene indicador de empresa, es muy probable que sea el nombre
-            if (hasCompanyIndicator) {
-                return line
-            }
-            
-            // Si es la primera o segunda línea con texto válido, probablemente es el nombre
+            // Si llegamos aquí, probablemente es el nombre
             if (line.any { it.isLetter() }) {
                 return line
             }
@@ -392,9 +417,80 @@ object InvoiceParser {
                 }
             }
             
+            // Detectar formato "Base Imponible | % IVA | Cuota IVA | Total" (ej: ElectroNow)
+            // Los valores pueden estar en orden: Total, Cuota, %, Base o Base, %, Cuota, Total
+            if ((line.contains("BASE") && line.contains("IMPONIBLE") && line.contains("CUOTA")) ||
+                (line.contains("BASE") && line.contains("IVA") && line.contains("TOTAL") && line.contains("%"))) {
+                
+                log("Detectado encabezado Base Imponible/Cuota IVA/Total en línea $i: ${lines[i]}")
+                
+                // Buscar línea con los valores (4 números: Base, %, Cuota, Total)
+                for (j in maxOf(0, i - 5) until minOf(i + 5, lines.size)) {
+                    if (j == i) continue
+                    val valueLine = lines[j]
+                    val numbers = extractNumbers(valueLine)
+                    
+                    // Buscar también porcentajes enteros (21, 10, 4)
+                    val allNumbers = mutableListOf<Double>()
+                    allNumbers.addAll(numbers)
+                    
+                    // Extraer números enteros que podrían ser tasas de IVA
+                    val intPattern = Regex("\\b(21|10|4)\\b")
+                    intPattern.findAll(valueLine).forEach { match ->
+                        val num = match.value.toDoubleOrNull()
+                        if (num != null && num !in allNumbers) {
+                            allNumbers.add(num)
+                        }
+                    }
+                    
+                    if (allNumbers.size >= 3) {
+                        log("Números encontrados cerca del encabezado IVA: $allNumbers")
+                        
+                        // Identificar la tasa de IVA (4, 10 o 21)
+                        val possibleRate = allNumbers.find { it == 21.0 || it == 10.0 || it == 4.0 }
+                        if (possibleRate != null) {
+                            taxRate = possibleRate / 100.0
+                            
+                            // Los otros valores: el mayor es Total, el siguiente es Base, el menor es Cuota
+                            val otherValues = allNumbers.filter { it != possibleRate && it > 1 }.sortedDescending()
+                            
+                            if (otherValues.size >= 3) {
+                                total = otherValues[0]
+                                subtotal = otherValues[1]
+                                tax = otherValues[2]
+                            } else if (otherValues.size >= 2) {
+                                // Intentar deducir el tercero
+                                val v1 = otherValues[0]
+                                val v2 = otherValues[1]
+                                
+                                // Verificar cuál combinación cuadra: base + cuota = total
+                                if (kotlin.math.abs(v2 + (v2 * possibleRate / 100.0) - v1) < 1) {
+                                    total = v1
+                                    subtotal = v2
+                                    tax = v1 - v2
+                                } else {
+                                    total = v1
+                                    subtotal = v2
+                                    tax = v1 - v2
+                                }
+                            }
+                            
+                            // Validar que cuadra matemáticamente
+                            if (total != null && subtotal != null && tax != null) {
+                                val expectedTotal = subtotal!! + tax!!
+                                if (kotlin.math.abs(total!! - expectedTotal) < 0.1) {
+                                    log("Formato Base/Cuota/Total validado: Total=$total, Base=$subtotal, IVA=$tax, Tasa=$possibleRate%")
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
             // Detectar formato "BASE IMP IVA CUOTA" (ej: Sibuya)
             // La siguiente línea contiene: BASE, TASA%, CUOTA (ej: "108,00 10% 10,80")
-            if (line.contains("BASE") && line.contains("IMP") && line.contains("CUOTA")) {
+            if (line.contains("BASE") && line.contains("IMP") && line.contains("CUOTA") && !line.contains("IMPONIBLE")) {
                 log("Detectado encabezado BASE IMP IVA CUOTA en línea $i: ${lines[i]}")
                 
                 // Buscar la línea con los valores (formato: BASE TASA% CUOTA)

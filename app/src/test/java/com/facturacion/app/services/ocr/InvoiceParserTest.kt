@@ -257,6 +257,65 @@ class InvoiceParserTest {
     }
 
     @Test
+    fun testElectronowPdfOCR() {
+        // Texto extraído de PDF ElectroNow - formato "Base Imponible | % IVA | Cuota IVA | Total"
+        val text = """
+SEVILLA
+CALLE PERAL 51, PISO 2 PUERTA A
+41002
+Sevilla
+02/06/20251N24.521
+FEDERICO ONDARTS
+ESPAÑA
+DONOSTIA - SAN SEBASTIAN20011
+AVENIDA DE MADRID, 16
+ELECTRONOW RETAIL S.L.
+Cliente:
+FECHA EMISION
+ImportePrecioDescripción Cant.EAN
+Tlf:
+ENTREGA
+Z0641643VDni/Nif
+FACTURA
+FACTURA
+P/159.541Albarán:
+362,81 362,81LAVADORA HISENSE WD3S9043BW3 D/A 9-6KG - 1,006901101830166
+20,66 20,66SERVICIO ADICIONAL DE INSTALACION BASICA 1,00
+0,00 0,00SERVICIO ENTREGA DOMICILIO 1,00
+Método de Pago:
+464,00Vcto: 02/06/2025TARJETA ECOMMERCE
+¡Gracias! Por confiar en ElectroNOW
+464,00 80,53 21 383,47
+Base Imponible % IVA Cuota IVA Total
+        """.trimIndent()
+
+        val result = InvoiceParser.parse(text)
+
+        println("\n=== ElectroNow PDF OCR ===")
+        println("Establecimiento: ${result.establishment}")
+        println("Fecha: ${result.date}")
+        println("Total: ${result.total}")
+        println("Subtotal: ${result.subtotal}")
+        println("IVA: ${result.tax}")
+        println("Tasa IVA: ${result.taxRate?.times(100)}%")
+        println("Confianza: ${result.confidence}")
+
+        // El establecimiento debe ser ELECTRONOW RETAIL S.L., NO Sevilla
+        assertNotNull("Establecimiento no detectado", result.establishment)
+        assertTrue("Establecimiento incorrecto - no debe ser SEVILLA", 
+            !result.establishment!!.uppercase().contains("SEVILLA"))
+        
+        // Valores esperados:
+        // Total: 464,00
+        // Base imponible (Subtotal): 383,47
+        // IVA (Cuota): 80,53
+        // Tasa: 21%
+        assertEquals("Total incorrecto", 464.00, result.total ?: 0.0, 0.01)
+        assertEquals("Subtotal incorrecto", 383.47, result.subtotal ?: 0.0, 0.01)
+        assertEquals("IVA incorrecto", 80.53, result.tax ?: 0.0, 0.01)
+    }
+
+    @Test
     fun testOuigoPdfDirectText() {
         // Texto extraído directamente del PDF de OUIGO (no OCR)
         val text = """
