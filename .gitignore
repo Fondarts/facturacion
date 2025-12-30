@@ -89,3 +89,8 @@ web/frontend/dist/
 web/frontend/node_modules/
 web/backend/node_modules/
 
+# Environment variables
+web/frontend/.env
+web/frontend/.env.local
+web/frontend/.env.*.local
+
