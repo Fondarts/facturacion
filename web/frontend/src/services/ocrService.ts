@@ -20,6 +20,12 @@ const OCR_SERVICE = (import.meta.env.VITE_OCR_SERVICE || 'tesseract') as 'google
 const GOOGLE_VISION_API_KEY = import.meta.env.VITE_GOOGLE_VISION_API_KEY || '';
 const OCR_SPACE_API_KEY = import.meta.env.VITE_OCR_SPACE_API_KEY || '';
 
+// Debug: mostrar qué servicio está configurado (solo en desarrollo)
+if (import.meta.env.DEV) {
+  console.log('🔍 OCR Service configurado:', OCR_SERVICE);
+  console.log('🔑 OCR.space API Key:', OCR_SPACE_API_KEY ? '✅ Configurada' : '❌ No configurada');
+}
+
 /**
  * Convierte un File a base64
  */
@@ -94,37 +100,62 @@ async function extractTextWithGoogleVision(imageFile: File, onProgress?: (progre
 async function extractTextWithOCRSpace(imageFile: File, onProgress?: (progress: number) => void): Promise<string> {
   if (onProgress) onProgress(30);
 
+  if (!OCR_SPACE_API_KEY) {
+    throw new Error('OCR.space API key no configurada. Agrega VITE_OCR_SPACE_API_KEY en tu archivo .env');
+  }
+
   const formData = new FormData();
   formData.append('file', imageFile);
   formData.append('language', 'spa');
   formData.append('isOverlayRequired', 'false');
   formData.append('detectOrientation', 'true');
   formData.append('scale', 'true');
-
-  if (OCR_SPACE_API_KEY) {
-    formData.append('apikey', OCR_SPACE_API_KEY);
-  }
+  formData.append('apikey', OCR_SPACE_API_KEY);
+  formData.append('OCREngine', '2'); // Usar el motor más preciso
 
   if (onProgress) onProgress(60);
 
-  const response = await fetch('https://api.ocr.space/parse/image', {
-    method: 'POST',
-    body: formData,
-  });
+  try {
+    const response = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      body: formData,
+    });
 
-  if (!response.ok) {
-    throw new Error(`OCR.space API error: ${response.statusText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OCR.space error response:', errorText);
+      throw new Error(`OCR.space API error: ${response.status} ${response.statusText}`);
+    }
+
+    if (onProgress) onProgress(90);
+
+    const data = await response.json();
+    console.log('OCR.space response:', data);
+
+    // OCR.space puede devolver errores en la respuesta JSON
+    if (data.OCRExitCode !== 1 && data.OCRExitCode !== 2) {
+      const errorMessage = data.ErrorMessage?.[0] || 'Error desconocido de OCR.space';
+      console.error('OCR.space error:', errorMessage);
+      throw new Error(`OCR.space error: ${errorMessage}`);
+    }
+
+    // Extraer texto de todos los resultados parseados
+    let text = '';
+    if (data.ParsedResults && data.ParsedResults.length > 0) {
+      text = data.ParsedResults.map((result: any) => result.ParsedText || '').join('\n');
+    }
+
+    if (onProgress) onProgress(100);
+
+    console.log(`OCR.space extrajo ${text.length} caracteres`);
+    if (text.length === 0) {
+      console.warn('OCR.space no extrajo texto. Respuesta completa:', JSON.stringify(data, null, 2));
+    }
+    return text;
+  } catch (error) {
+    console.error('Error en OCR.space:', error);
+    throw error;
   }
-
-  if (onProgress) onProgress(90);
-
-  const data = await response.json();
-  const text = data.ParsedResults?.[0]?.ParsedText || '';
-
-  if (onProgress) onProgress(100);
-
-  console.log(`OCR.space extrajo ${text.length} caracteres`);
-  return text;
 }
 
 /**
