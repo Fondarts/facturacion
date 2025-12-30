@@ -526,145 +526,148 @@ export default function FacturaEdit() {
             </div>
           </div>
 
-          {/* From (Emisor) */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Building2 size={20} className="text-amber-400" />
-                From (Emisor)
-              </h2>
-              <div className="relative dropdown-container">
-                <button
-                  type="button"
-                  onClick={() => setShowEmisorDropdown(!showEmisorDropdown)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
-                >
-                  <User size={16} />
-                  Elegir
-                  <ChevronDown size={16} />
-                </button>
-                {showEmisorDropdown && (
-                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
-                    {emisores.length === 0 ? (
-                      <div className="p-4 text-slate-400 text-sm">No hay emisores guardados</div>
-                    ) : (
-                      emisores.map((emisor) => (
-                        <div
-                          key={emisor.id}
-                          className="flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0 group"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => selectEmisor(emisor)}
-                            className="flex-1 text-left"
+          {/* From (Emisor) y Cliente en 2 columnas */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* From (Emisor) */}
+            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Building2 size={20} className="text-amber-400" />
+                  From (Emisor)
+                </h2>
+                <div className="relative dropdown-container">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmisorDropdown(!showEmisorDropdown)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
+                  >
+                    <User size={16} />
+                    Elegir
+                    <ChevronDown size={16} />
+                  </button>
+                  {showEmisorDropdown && (
+                    <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
+                      {emisores.length === 0 ? (
+                        <div className="p-4 text-slate-400 text-sm">No hay emisores guardados</div>
+                      ) : (
+                        emisores.map((emisor) => (
+                          <div
+                            key={emisor.id}
+                            className="flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0 group"
                           >
-                            <div className="font-medium text-white">{emisor.nombre}</div>
-                            <div className="text-xs text-slate-400 mt-1 line-clamp-2">{emisor.datos}</div>
-                          </button>
-                          {emisor.id && (
                             <button
                               type="button"
-                              onClick={(e) => handleDeleteEmisor(emisor.id!, e)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
-                              title="Eliminar emisor"
+                              onClick={() => selectEmisor(emisor)}
+                              className="flex-1 text-left"
                             >
-                              <Trash2 size={14} />
+                              <div className="font-medium text-white">{emisor.nombre}</div>
+                              <div className="text-xs text-slate-400 mt-1 line-clamp-2">{emisor.datos}</div>
                             </button>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
+                            {emisor.id && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteEmisor(emisor.id!, e)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Eliminar emisor"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
+              
+              <textarea
+                value={formData.from}
+                onChange={(e) => handleChange('from', e.target.value)}
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
+                placeholder="Tu nombre o empresa&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: tu@email.com&#10;Teléfono: 123 456 789&#10;CIF/NIF: 12345678A"
+                rows={6}
+              />
+              <button
+                type="button"
+                onClick={saveCurrentEmisor}
+                disabled={!formData.from.trim()}
+                className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Guardar este emisor
+              </button>
             </div>
-            
-            <textarea
-              value={formData.from}
-              onChange={(e) => handleChange('from', e.target.value)}
-              className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
-              placeholder="Tu nombre o empresa&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: tu@email.com&#10;Teléfono: 123 456 789&#10;CIF/NIF: 12345678A"
-              rows={6}
-            />
-            <button
-              type="button"
-              onClick={saveCurrentEmisor}
-              disabled={!formData.from.trim()}
-              className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Guardar este emisor
-            </button>
-          </div>
 
-          {/* Cliente */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <User size={20} className="text-amber-400" />
-                Cliente
-              </h2>
-              <div className="relative dropdown-container">
-                <button
-                  type="button"
-                  onClick={() => setShowClienteDropdown(!showClienteDropdown)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
-                >
-                  <User size={16} />
-                  Elegir
-                  <ChevronDown size={16} />
-                </button>
-                {showClienteDropdown && (
-                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
-                    {clientes.length === 0 ? (
-                      <div className="p-4 text-slate-400 text-sm">No hay clientes guardados</div>
-                    ) : (
-                      clientes.map((cliente) => (
-                        <div
-                          key={cliente.id}
-                          className="flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0 group"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => selectCliente(cliente)}
-                            className="flex-1 text-left"
+            {/* Cliente */}
+            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <User size={20} className="text-amber-400" />
+                  Cliente
+                </h2>
+                <div className="relative dropdown-container">
+                  <button
+                    type="button"
+                    onClick={() => setShowClienteDropdown(!showClienteDropdown)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
+                  >
+                    <User size={16} />
+                    Elegir
+                    <ChevronDown size={16} />
+                  </button>
+                  {showClienteDropdown && (
+                    <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
+                      {clientes.length === 0 ? (
+                        <div className="p-4 text-slate-400 text-sm">No hay clientes guardados</div>
+                      ) : (
+                        clientes.map((cliente) => (
+                          <div
+                            key={cliente.id}
+                            className="flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0 group"
                           >
-                            <div className="font-medium text-white">{cliente.nombre}</div>
-                            <div className="text-xs text-slate-400 mt-1 line-clamp-2">{cliente.datos}</div>
-                          </button>
-                          {cliente.id && (
                             <button
                               type="button"
-                              onClick={(e) => handleDeleteCliente(cliente.id!, e)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
-                              title="Eliminar cliente"
+                              onClick={() => selectCliente(cliente)}
+                              className="flex-1 text-left"
                             >
-                              <Trash2 size={14} />
+                              <div className="font-medium text-white">{cliente.nombre}</div>
+                              <div className="text-xs text-slate-400 mt-1 line-clamp-2">{cliente.datos}</div>
                             </button>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
+                            {cliente.id && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteCliente(cliente.id!, e)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Eliminar cliente"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
+              
+              <textarea
+                value={formData.cliente}
+                onChange={(e) => handleChange('cliente', e.target.value)}
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
+                placeholder="Nombre del cliente&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: cliente@ejemplo.com&#10;Teléfono: 123 456 789"
+                required
+                rows={6}
+              />
+              <button
+                type="button"
+                onClick={saveCurrentCliente}
+                disabled={!formData.cliente.trim()}
+                className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Guardar este cliente
+              </button>
             </div>
-            
-            <textarea
-              value={formData.cliente}
-              onChange={(e) => handleChange('cliente', e.target.value)}
-              className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
-              placeholder="Nombre del cliente&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: cliente@ejemplo.com&#10;Teléfono: 123 456 789"
-              required
-              rows={6}
-            />
-            <button
-              type="button"
-              onClick={saveCurrentCliente}
-              disabled={!formData.cliente.trim()}
-              className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Guardar este cliente
-            </button>
           </div>
 
           {/* Items */}
