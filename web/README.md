@@ -60,3 +60,4 @@ Abrir http://localhost:5173 en el navegador.
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS
 - **Base de datos:** SQLite (fichero local)
 
+

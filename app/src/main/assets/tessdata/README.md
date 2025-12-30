@@ -16,3 +16,4 @@ Para que Tesseract OCR funcione correctamente, necesitas descargar los archivos 
 La aplicación copiará automáticamente estos archivos al directorio de la app en el primer uso.
 
 
+
