@@ -346,6 +346,10 @@ function extractMonetaryValues(text: string, lines: string[]): MonetaryValues {
     /TOTAL\s+EUR[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
     /(?:^|\n)\s*TOTAL[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
     /(?:^|\n)[^S\n]*TOTAL\s*:?\s*€?\s*([\d]+[.,]\d{2})/i,
+    // Patrones para texto mal formateado del OCR
+    /VISA[^\n]*?([\d]+[.,]\d{2})\s*[€,0]?/i, // "VISA — 118,80"
+    /TARJETA[^\n]*?([\d]+[.,]\d{2})\s*€?/i, // "TARJETA 118,80"
+    /ENTREGADO[^\n]*?([\d]+[.,]\d{2})\s*€?/i, // "ENTREGADO 118,80"
   ];
 
   const subtotalPatterns = [
@@ -354,6 +358,9 @@ function extractMonetaryValues(text: string, lines: string[]): MonetaryValues {
     /(?<!de )Subtotal\s*:?\s*([\d]+[.,]\d{2})\s*€?/i,
     /Base\s*:[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
     /\d+\s*%\s*:?\s*Base\s*:?\s*([\d]+[.,]\d{2})\s*€?/i,
+    // Patrones para texto mal formateado del OCR
+    /BAS\s+([\d]+[.,]\d{2})\s+\d+%/i, // "BAS 108,00 10%"
+    /BASE\s+([\d]+[.,]\d{2})\s+\d+%/i, // "BASE 108,00 10%"
   ];
 
   const taxPatterns = [
@@ -363,12 +370,19 @@ function extractMonetaryValues(text: string, lines: string[]): MonetaryValues {
     /I\.?V\.?A\.?\s*\d+[,.]?\d*\s*%[^(s/][^\n]*?([\d]+[.,]\d{2})\s*€?/i,
     /Impuesto\s*:?\s*([\d]+[.,]\d{2})\s*€?/i,
     /(?<!\()IVA\s*:?\s*([\d]+[.,]\d{2})\s*€?(?!\))/i,
+    // Patrones para texto mal formateado del OCR
+    /\d+%\s+([\d]+[.,]\d{2})\s*[€W]?/i, // "10% 10,80" o "10% 10,80 W"
+    /BAS\s+[\d.,]+\s+\d+%\s+([\d]+[.,]\d{2})/i, // "BAS 108,00 10% 10,80"
   ];
 
   const taxRatePatterns = [
     /I\.?V\.?A\.?\s*([\d.,]+)\s*%/i,
     /([\d.,]+)\s*%\s*:?\s*Base/i,
     /IVA\s*(\d+)%/i,
+    // Patrones para texto mal formateado del OCR
+    /BAS\s+[\d.,]+\s+(\d+)%/i, // "BAS 108,00 10%"
+    /BASE\s+[\d.,]+\s+(\d+)%/i, // "BASE 108,00 10%"
+    /SE\s+IMP\s+IVA\s+(\d+)%/i, // "SE IMP IVA 10%"
   ];
 
   // Buscar Total
@@ -450,6 +464,29 @@ function extractMonetaryValues(text: string, lines: string[]): MonetaryValues {
     if (subtotal == null && tableValues.subtotal != null) subtotal = tableValues.subtotal;
     if (tax == null && tableValues.tax != null) tax = tableValues.tax;
     if (taxRate == null && tableValues.taxRate != null) taxRate = tableValues.taxRate;
+  }
+
+  // Búsqueda inteligente adicional: buscar líneas con formato "BAS X 10% Y" o similar
+  if (subtotal == null || tax == null || taxRate == null) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].toUpperCase();
+      // Buscar formato: "BAS 108,00 10% 10,80" o "BASE 108,00 10% 10,80"
+      const basPattern = /BAS\s+([\d]+[.,]\d{2})\s+(\d+)%\s+([\d]+[.,]\d{2})/i;
+      const match = line.match(basPattern);
+      if (match) {
+        const baseValue = parseSpanishNumber(match[1]);
+        const rateValue = parseFloat(match[2]);
+        const taxValue = parseSpanishNumber(match[3]);
+        
+        if (baseValue != null && rateValue != null && taxValue != null) {
+          if (subtotal == null) subtotal = baseValue;
+          if (taxRate == null) taxRate = rateValue / 100.0;
+          if (tax == null) tax = taxValue;
+          console.log(`Valores extraídos de formato BAS: Base=${subtotal}, Tasa=${rateValue}%, IVA=${tax}`);
+          break;
+        }
+      }
+    }
   }
 
   return { total, subtotal, tax, taxRate };
