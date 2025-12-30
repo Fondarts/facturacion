@@ -363,7 +363,7 @@ export default function FacturaBatch() {
                   <button
                     type="button"
                     onClick={() => processInvoiceOCR(invoice.id)}
-                    disabled={invoice.processing || invoice.ocrResults != null}
+                    disabled={invoice.processing}
                     className="text-sm flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {invoice.processing ? (
@@ -395,37 +395,80 @@ export default function FacturaBatch() {
             </div>
 
             {/* OCR Results */}
-            {invoice.ocrResults && !invoice.applied && (
+            {invoice.ocrResults && (
               <div className="mb-4 p-4 bg-slate-900/50 rounded-xl border border-amber-500/30">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-amber-400">Resultados del OCR</span>
-                  <button
-                    type="button"
-                    onClick={() => applyOcrResults(invoice.id)}
-                    className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
-                  >
-                    <Check size={12} />
-                    Aplicar
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <span className="text-slate-400">Establecimiento:</span>
-                    <div className="text-white">{invoice.ocrResults.establishment || 'No detectado'}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-amber-400">Resultados del OCR</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <div className="flex-1 bg-slate-700/50 rounded-full h-2">
+                        <div
+                          className="bg-amber-400 h-2 rounded-full transition-all"
+                          style={{ width: `${invoice.ocrResults.confidence * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-amber-400 font-medium">{Math.round(invoice.ocrResults.confidence * 100)}%</span>
+                    </div>
                   </div>
+                  {!invoice.applied && (
+                    <button
+                      type="button"
+                      onClick={() => applyOcrResults(invoice.id)}
+                      className="text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                    >
+                      <Check size={12} />
+                      Aplicar
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                   <div>
-                    <span className="text-slate-400">Fecha:</span>
-                    <div className="text-white">
-                      {invoice.ocrResults.date ? invoice.ocrResults.date.toLocaleDateString('es-ES') : 'No detectado'}
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Establecimiento</label>
+                    <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
+                      {invoice.ocrResults.establishment || <span className="text-slate-500">No detectado</span>}
                     </div>
                   </div>
                   <div>
-                    <span className="text-slate-400">Total:</span>
-                    <div className="text-white font-semibold">
-                      {invoice.ocrResults.total != null ? `${invoice.ocrResults.total.toFixed(2)} €` : 'No detectado'}
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Fecha</label>
+                    <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
+                      {invoice.ocrResults.date ? invoice.ocrResults.date.toLocaleDateString('es-ES') : <span className="text-slate-500">No detectado</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Subtotal</label>
+                    <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
+                      {invoice.ocrResults.subtotal != null ? `${invoice.ocrResults.subtotal.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">IVA</label>
+                    <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
+                      {invoice.ocrResults.tax != null ? `${invoice.ocrResults.tax.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Tasa IVA</label>
+                    <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
+                      {invoice.ocrResults.taxRate != null ? `${(invoice.ocrResults.taxRate * 100).toFixed(2)}%` : <span className="text-slate-500">No detectado</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Total</label>
+                    <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white font-semibold text-sm">
+                      {invoice.ocrResults.total != null ? `${invoice.ocrResults.total.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
                     </div>
                   </div>
                 </div>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-300">
+                    Ver texto extraído
+                  </summary>
+                  <div className="mt-2 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+                    <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                      {invoice.ocrResults.rawText}
+                    </pre>
+                  </div>
+                </details>
               </div>
             )}
 
