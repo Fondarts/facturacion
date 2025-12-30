@@ -53,9 +53,12 @@
 
 ## Verificación
 
-- El plan gratuito incluye **$300 de créditos por mes**
-- Esto es suficiente para procesar aproximadamente **1,000-5,000 facturas** por mes
-- Después del período de prueba, se cobra por uso (pero el free tier es muy generoso)
+- **Plan gratuito**: **1,000 imágenes al mes GRATIS**
+- Después de 1,000 imágenes: **$1.50 USD por cada 1,000 imágenes adicionales**
+- Ejemplo: Si procesas 2,000 facturas/mes = $1.50 USD/mes
+- Si procesas menos de 1,000 facturas/mes = **$0 USD (completamente gratis)**
+
+⚠️ **Nota**: Google Cloud requiere una tarjeta de crédito para activar el free tier, pero NO te cobrará nada hasta que superes las 1,000 imágenes gratuitas.
 
 ## Seguridad
 
@@ -71,8 +74,9 @@
 
 **Error: "Billing required"**
 - Google Cloud requiere una tarjeta de crédito para activar el free tier
-- No se te cobrará nada hasta que uses más de $300/mes
+- **NO se te cobrará nada** hasta que proceses más de 1,000 imágenes/mes
 - Puedes configurar alertas de presupuesto para evitar sorpresas
+- Puedes establecer un límite de gasto en "Presupuestos y alertas"
 
 **Error: "Quota exceeded"**
 - Has usado todos los créditos gratuitos del mes
