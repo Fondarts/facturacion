@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, Plus, Search, Trash2, Edit, Calendar, ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { FileText, Plus, Search, Trash2, Edit, Calendar, ChevronDown, ChevronRight, Download, Upload } from 'lucide-react';
 import { getFacturas, deleteFactura } from '../api';
 import { Factura, FacturaItem } from '../types';
 import FileViewer from '../components/FileViewer';
@@ -333,13 +333,22 @@ export default function FacturasList() {
           <h1 className="text-3xl font-bold text-white mb-2">Facturas</h1>
           <p className="text-slate-400">{facturas.length} facturas registradas</p>
         </div>
-        <Link
-          to="/facturas/nueva"
-          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
-        >
-          <Plus size={20} />
-          Ingresar Factura
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            to="/facturas/batch"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium hover:bg-amber-500/30 transition-all duration-200"
+          >
+            <Upload size={20} />
+            Ingresar en Lote
+          </Link>
+          <Link
+            to="/facturas/nueva"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
+          >
+            <Plus size={20} />
+            Ingresar Factura
+          </Link>
+        </div>
       </div>
 
       {/* Search and filters */}

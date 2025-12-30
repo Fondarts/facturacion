@@ -3,6 +3,7 @@ import { FileText, Plus, BarChart3, Home } from 'lucide-react';
 import FacturasList from './pages/FacturasList';
 import FacturaEdit from './pages/FacturaEdit';
 import FacturaNew from './pages/FacturaNew';
+import FacturaBatch from './pages/FacturaBatch';
 import Facturar from './pages/Facturar';
 import Dashboard from './pages/Dashboard';
 
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/facturas" element={<FacturasList />} />
           <Route path="/facturas/nueva" element={<FacturaNew />} />
+          <Route path="/facturas/batch" element={<FacturaBatch />} />
           <Route path="/facturas/:id" element={<FacturaEdit />} />
           <Route path="/facturar" element={<Facturar />} />
           <Route path="/stats" element={<Dashboard />} />
