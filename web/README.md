@@ -61,3 +61,5 @@ Abrir http://localhost:5173 en el navegador.
 - **Base de datos:** SQLite (fichero local)
 
 
+
+

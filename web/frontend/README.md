@@ -105,3 +105,5 @@ La aplicación usa Firebase para:
 Asegúrate de que `firebase.ts` tenga la configuración correcta de tu proyecto Firebase.
 
 
+
+

@@ -62,3 +62,5 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSy...
 
 Si el servicio configurado falla (por ejemplo, se agotaron los créditos), el sistema automáticamente usará Tesseract.js como fallback.
 
+
+
