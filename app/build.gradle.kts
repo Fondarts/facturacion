@@ -22,6 +22,17 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            // Usar el keystore de debug por defecto para desarrollo
+            // En producción, deberías crear tu propio keystore
+            storeFile = file("${project.rootDir}/app/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -29,6 +40,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            // Asegurar que debug también esté firmado
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     
@@ -68,6 +84,13 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+    
+    // Configuración para generar APK universal (todas las arquitecturas)
+    splits {
+        abi {
+            isEnable = false // Deshabilitar splits para generar un APK universal
         }
     }
 }
