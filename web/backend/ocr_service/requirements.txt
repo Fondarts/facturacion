@@ -1,0 +1,11 @@
+paddleocr>=2.7.0
+paddlepaddle>=2.5.0
+flask>=3.0.0
+flask-cors>=4.0.0
+pillow>=10.0.0
+numpy>=1.24.0
+opencv-python>=4.8.0
+# PP-StructureV3 requiere paddlex con extras OCR
+# Instalar con: pip install "paddlex[ocr]"
+# O ejecutar: pip install -r requirements.txt --extra-index-url https://pypi.org/simple
+

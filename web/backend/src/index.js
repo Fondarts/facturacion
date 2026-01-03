@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./database');
+const axios = require('axios');
+const FormData = require('form-data');
 
 const app = express();
 const PORT = 3001;
@@ -239,6 +241,101 @@ app.get('/api/sync', (req, res) => {
     res.json({ facturas });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== OCR CON PADDLEOCR ====================
+
+// Configuración del servicio OCR
+const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL || 'http://localhost:5000';
+
+// Procesar imagen con PaddleOCR
+app.post('/api/ocr/process', upload.single('image'), async (req, res) => {
+  console.log('🔔 RECIBIDA PETICIÓN OCR en backend Node.js');
+  console.log(`📥 Archivo recibido: ${req.file ? req.file.originalname : 'NINGUNO'}`);
+  
+  try {
+    if (!req.file) {
+      console.log('❌ No se recibió archivo');
+      return res.status(400).json({ error: 'Se requiere una imagen' });
+    }
+
+    console.log(`📷 Procesando archivo: ${req.file.filename}, tamaño: ${req.file.size} bytes`);
+
+    // Convertir archivo a base64
+    const fs = require('fs');
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = imageBuffer.toString('base64');
+    const mimeType = req.file.mimetype || 'image/jpeg';
+    const dataUri = `data:${mimeType};base64,${base64Image}`;
+
+    console.log(`📤 Enviando a servicio Python: ${OCR_SERVICE_URL}/ocr/process`);
+    console.log(`📤 Tamaño base64: ${dataUri.length} caracteres`);
+
+    // Llamar al servicio Python de PaddleOCR
+    try {
+      const response = await axios.post(`${OCR_SERVICE_URL}/ocr/process`, {
+        image: dataUri
+      }, {
+        timeout: 120000, // 120 segundos timeout (2 minutos) - OCR puede tardar con imágenes grandes
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log(`✅ Respuesta recibida del servicio Python: ${response.status}`);
+
+      // Limpiar archivo temporal
+      fs.unlinkSync(req.file.path);
+
+      if (response.data.success) {
+        console.log('✅ OCR procesado exitosamente');
+        res.json(response.data);
+      } else {
+        console.log('❌ OCR falló:', response.data);
+        res.status(500).json({ error: 'Error procesando OCR' });
+      }
+    } catch (ocrError) {
+      // Limpiar archivo temporal en caso de error
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      console.error('❌ Error llamando al servicio OCR:', ocrError.message);
+      console.error('❌ Código de error:', ocrError.code);
+      if (ocrError.response) {
+        console.error('❌ Respuesta del servidor:', ocrError.response.status, ocrError.response.data);
+      }
+      
+      // Si el servicio OCR no está disponible, devolver error descriptivo
+      if (ocrError.code === 'ECONNREFUSED' || ocrError.code === 'ETIMEDOUT') {
+        return res.status(503).json({
+          error: 'Servicio OCR no disponible',
+          message: 'El servicio PaddleOCR no está ejecutándose. Inicia el servicio con: cd web/backend/ocr_service && python app.py'
+        });
+      }
+      
+      throw ocrError;
+    }
+  } catch (error) {
+    console.error('Error en /api/ocr/process:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Health check del servicio OCR
+app.get('/api/ocr/health', async (req, res) => {
+  try {
+    const response = await axios.get(`${OCR_SERVICE_URL}/health`, {
+      timeout: 5000
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({
+      status: 'error',
+      message: 'Servicio OCR no disponible',
+      error: error.message
+    });
   }
 });
 

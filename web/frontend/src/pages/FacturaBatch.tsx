@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Upload, Scan, X, Check, Save, Loader2, Trash2 } from 'lucide-react';
 import { createFactura } from '../api';
-import { extractTextFromImage, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
-import { parseInvoiceText } from '../services/invoiceParser';
+import { extractInvoiceData, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
 
 interface BatchInvoice {
   id: string;
@@ -73,19 +72,7 @@ export default function FacturaBatch() {
 
     try {
       await initializeOCR();
-      const rawText = await extractTextFromImage(invoice.file);
-      const parsed = parseInvoiceText(rawText);
-
-      const extractedData: ExtractedInvoiceData = {
-        date: parsed.date,
-        establishment: parsed.establishment,
-        total: parsed.total,
-        subtotal: parsed.subtotal,
-        tax: parsed.tax,
-        taxRate: parsed.taxRate,
-        rawText,
-        confidence: parsed.confidence,
-      };
+      const extractedData = await extractInvoiceData(invoice.file);
 
       setInvoices((prev) =>
         prev.map((inv) =>
@@ -98,9 +85,10 @@ export default function FacturaBatch() {
             : inv
         )
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error procesando OCR:', error);
-      alert('Error al procesar la imagen. Por favor, intenta de nuevo.');
+      const errorMessage = error?.message || 'Error al procesar la imagen. Por favor, intenta de nuevo.';
+      alert(errorMessage);
       setInvoices((prev) =>
         prev.map((inv) => (inv.id === invoiceId ? { ...inv, processing: false } : inv))
       );

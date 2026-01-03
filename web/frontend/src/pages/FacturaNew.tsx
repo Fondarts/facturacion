@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, Upload, Scan, X, Check } from 'lucide-react';
 import { createFactura } from '../api';
-import { extractTextFromImage, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
-import { parseInvoiceText } from '../services/invoiceParser';
+import { extractInvoiceData, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
 
 export default function FacturaNew() {
   const navigate = useNavigate();
@@ -84,31 +83,24 @@ export default function FacturaNew() {
     setOcrResults(null);
 
     try {
+      console.log('🚀 Iniciando procesamiento OCR...');
+      console.log('📁 Archivo:', archivo.name, archivo.type, archivo.size, 'bytes');
+      
       // Inicializar OCR si no está inicializado
       await initializeOCR((progress) => setOcrProgress(progress));
 
-      // Extraer texto
-      const rawText = await extractTextFromImage(archivo, (progress) => setOcrProgress(progress));
+      console.log('📤 Llamando a extractInvoiceData...');
+      // Extraer datos estructurados de la factura (usa PaddleOCR si está configurado)
+      const extractedData = await extractInvoiceData(archivo, (progress) => setOcrProgress(progress));
 
-      // Parsear datos de la factura
-      const parsed = parseInvoiceText(rawText);
-
-      const extractedData: ExtractedInvoiceData = {
-        date: parsed.date,
-        establishment: parsed.establishment,
-        total: parsed.total,
-        subtotal: parsed.subtotal,
-        tax: parsed.tax,
-        taxRate: parsed.taxRate,
-        rawText,
-        confidence: parsed.confidence,
-      };
-
+      console.log('✅ Datos extraídos:', extractedData);
       setOcrResults(extractedData);
       setShowOcrResults(true);
-    } catch (error) {
-      console.error('Error procesando OCR:', error);
-      alert('Error al procesar la imagen. Por favor, intenta de nuevo.');
+    } catch (error: any) {
+      console.error('❌ Error procesando OCR:', error);
+      console.error('❌ Stack:', error?.stack);
+      const errorMessage = error?.message || 'Error al procesar la imagen. Por favor, intenta de nuevo.';
+      alert(errorMessage);
     } finally {
       setProcessingOCR(false);
       setOcrProgress(0);
