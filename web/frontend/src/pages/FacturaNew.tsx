@@ -82,28 +82,53 @@ export default function FacturaNew() {
     setOcrProgress(0);
     setOcrResults(null);
 
+    // Timeout de seguridad: 3 minutos
+    const timeoutId = setTimeout(() => {
+      console.error('⏱️ Timeout: El OCR tardó más de 3 minutos');
+      setProcessingOCR(false);
+      setOcrProgress(0);
+      alert('El procesamiento OCR está tardando demasiado. Por favor, intenta con una imagen más pequeña o verifica tu conexión a internet.');
+    }, 180000); // 3 minutos
+
     try {
       console.log('🚀 Iniciando procesamiento OCR...');
       console.log('📁 Archivo:', archivo.name, archivo.type, archivo.size, 'bytes');
       
       // Inicializar OCR si no está inicializado
-      await initializeOCR((progress) => setOcrProgress(progress));
+      console.log('🔧 Inicializando OCR...');
+      await initializeOCR((progress) => {
+        console.log(`📊 Progreso inicialización: ${progress}%`);
+        setOcrProgress(progress);
+      });
+      console.log('✅ OCR inicializado');
 
       console.log('📤 Llamando a extractInvoiceData...');
       // Extraer datos estructurados de la factura (usa PaddleOCR si está configurado)
-      const extractedData = await extractInvoiceData(archivo, (progress) => setOcrProgress(progress));
+      const extractedData = await extractInvoiceData(archivo, (progress) => {
+        console.log(`📊 Progreso extracción: ${progress}%`);
+        setOcrProgress(progress);
+      });
 
       console.log('✅ Datos extraídos:', extractedData);
+      console.log('🔄 Actualizando estado del componente...');
+      
+      // Actualizar estado de forma síncrona
       setOcrResults(extractedData);
       setShowOcrResults(true);
+      
+      console.log('✅ Estado actualizado, mostrando resultados');
     } catch (error: any) {
       console.error('❌ Error procesando OCR:', error);
+      console.error('❌ Tipo de error:', typeof error);
       console.error('❌ Stack:', error?.stack);
       const errorMessage = error?.message || 'Error al procesar la imagen. Por favor, intenta de nuevo.';
       alert(errorMessage);
     } finally {
+      clearTimeout(timeoutId);
+      console.log('🧹 Limpiando estado de procesamiento...');
       setProcessingOCR(false);
       setOcrProgress(0);
+      console.log('✅ Estado limpiado');
     }
   }
 

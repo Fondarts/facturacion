@@ -108,3 +108,4 @@ PP-OCRv5 + PP-StructureV3
 
 El frontend envía la imagen al backend Node.js, que la reenvía al servicio Python. El servicio Python procesa la imagen con PaddleOCR y devuelve datos estructurados.
 
+

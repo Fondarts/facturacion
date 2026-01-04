@@ -1,47 +1,57 @@
 # Facturación Web
 
-Versión web de la aplicación de gestión de facturas.
+Versión web de la aplicación de gestión de facturas con OCR usando Google Cloud Vision API.
 
-## Requisitos
+## 🚀 Inicio Rápido
+
+### Windows
+```bash
+# Doble click en:
+web/start.bat
+```
+
+### Linux/Mac
+```bash
+chmod +x web/start.sh
+./web/start.sh
+```
+
+### Manual
+
+**1. Backend (puerto 3001):**
+```bash
+cd web/backend
+npm install  # Solo la primera vez
+npm run dev
+```
+
+**2. Frontend (puerto 5173):** (en otra terminal)
+```bash
+cd web/frontend
+npm install  # Solo la primera vez
+npm run dev
+```
+
+**3. Abrir:** http://localhost:5173
+
+## ⚙️ Configuración
+
+### Variables de Entorno
+
+Crea `web/frontend/.env`:
+```env
+VITE_OCR_SERVICE=google
+VITE_GOOGLE_VISION_API_KEY=tu_api_key_aqui
+```
+
+**Obtener API Key de Google Vision:**
+- Ver `web/frontend/CONFIGURAR_GOOGLE_VISION.md`
+
+## 📋 Requisitos
 
 - Node.js 20+
 - npm
-
-## Instalación
-
-### Backend
-
-```bash
-cd backend
-npm install
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-```
-
-## Ejecución
-
-### Desarrollo
-
-Ejecutar backend y frontend en terminales separadas:
-
-**Backend (puerto 3001):**
-```bash
-cd backend
-npm run dev
-```
-
-**Frontend (puerto 5173):**
-```bash
-cd frontend
-npm run dev
-```
-
-Abrir http://localhost:5173 en el navegador.
+- Google Cloud Vision API Key (gratis: 1,000 imágenes/mes)
 
 ## Funcionalidades
 
@@ -56,9 +66,26 @@ Abrir http://localhost:5173 en el navegador.
 
 ## Stack Tecnológico
 
-- **Backend:** Node.js + Express + SQLite
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS
-- **Base de datos:** SQLite (fichero local)
+- **Base de datos:** Firebase Firestore
+- **OCR:** Google Cloud Vision API
+- **Backend Node.js:** Solo para PaddleOCR (opcional, no necesario con Google Vision)
+
+## 🌐 Deploy Online
+
+**Ver:** `DEPLOY_ONLINE.md` para instrucciones completas
+
+**Resumen rápido:**
+1. Frontend en Vercel (gratis, 5 minutos)
+2. No necesitas backend (Google Vision se llama desde el frontend)
+3. Configurar variables de entorno en Vercel
+
+## 📚 Documentación
+
+- `INICIAR_PROYECTO.md` - Guía detallada de inicio
+- `DEPLOY_ONLINE.md` - Guía de deploy
+- `web/frontend/CONFIGURAR_GOOGLE_VISION.md` - Configurar API key
+
 
 
 

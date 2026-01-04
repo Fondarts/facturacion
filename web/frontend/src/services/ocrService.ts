@@ -403,9 +403,26 @@ export async function extractInvoiceData(imageFile: File, onProgress?: (progress
     }
     
     console.log(`📄 Texto extraído: ${rawText.length} caracteres`);
-    const parsed = parseInvoiceText(rawText);
+    
+    let parsed;
+    try {
+      console.log('🔍 Iniciando parseo del texto...');
+      parsed = parseInvoiceText(rawText);
+      console.log('✅ Parseo completado:', {
+        establishment: parsed.establishment,
+        date: parsed.date,
+        total: parsed.total,
+        subtotal: parsed.subtotal,
+        tax: parsed.tax,
+        taxRate: parsed.taxRate,
+        confidence: parsed.confidence,
+      });
+    } catch (parseError) {
+      console.error('❌ Error en parseInvoiceText:', parseError);
+      throw new Error(`Error parseando el texto extraído: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+    }
 
-    return {
+    const result = {
       date: parsed.date,
       establishment: parsed.establishment,
       total: parsed.total,
@@ -415,6 +432,9 @@ export async function extractInvoiceData(imageFile: File, onProgress?: (progress
       rawText,
       confidence: parsed.confidence,
     };
+    
+    console.log('✅ Retornando resultado de extractInvoiceData:', result);
+    return result;
   } catch (error) {
     console.error('❌ Error extrayendo datos de factura:', error);
     

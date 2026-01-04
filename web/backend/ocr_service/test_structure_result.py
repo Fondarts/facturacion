@@ -21,3 +21,4 @@ if isinstance(result, list):
         if isinstance(result[0], dict):
             print(f"Keys del primer elemento: {list(result[0].keys())}")
 
+

@@ -74,3 +74,4 @@ Procesa una imagen y devuelve datos estructurados de la factura.
 - Para mejor rendimiento, considera usar GPU configurando `use_gpu=True` en `app.py`
 - El servicio está optimizado para facturas en español
 
+

@@ -35,3 +35,4 @@ pip uninstall paddlex
 pip install "paddlex[ocr]"
 ```
 
+

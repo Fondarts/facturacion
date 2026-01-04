@@ -76,3 +76,4 @@ Sigue la guía completa en: `GUIA_GOOGLE_VISION.md`
 - **NO se te cobrará nada** hasta que superes las 1,000 imágenes/mes
 - Puedes configurar alertas de presupuesto en Google Cloud Console
 
+
