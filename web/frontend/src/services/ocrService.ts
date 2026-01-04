@@ -55,8 +55,78 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 /**
+ * Convierte la primera página de un PDF a imagen (canvas)
+ */
+async function pdfToImage(pdfFile: File): Promise<File> {
+  try {
+    // Lazy load pdfjs-dist solo si es necesario
+    const pdfjsLib = await import('pdfjs-dist');
+    
+    // Configurar worker - usar CDN o worker local
+    if (typeof window !== 'undefined') {
+      // En el navegador, usar CDN o worker desde node_modules
+      try {
+        // Intentar usar worker desde node_modules (mejor para desarrollo)
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url
+        ).toString();
+      } catch {
+        // Fallback a CDN si no funciona
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      }
+    }
+    
+    console.log('📄 Convirtiendo PDF a imagen...');
+    
+    // Leer el PDF
+    const arrayBuffer = await pdfFile.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    
+    // Obtener la primera página
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.0 }); // Escala 2x para mejor calidad
+    
+    // Crear canvas
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('No se pudo obtener contexto del canvas');
+    }
+    
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+    
+    // Renderizar página en canvas
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+    }).promise;
+    
+    // Convertir canvas a blob y luego a File
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Error al convertir PDF a imagen'));
+          return;
+        }
+        const imageFile = new File([blob], pdfFile.name.replace('.pdf', '.png'), {
+          type: 'image/png',
+        });
+        console.log('✅ PDF convertido a imagen:', imageFile.name, imageFile.size, 'bytes');
+        resolve(imageFile);
+      }, 'image/png');
+    });
+  } catch (error) {
+    console.error('❌ Error convirtiendo PDF a imagen:', error);
+    throw new Error(`Error al procesar PDF: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
  * Extrae texto usando Google Cloud Vision API
  * Google Vision es muy preciso y tiene 1,000 imágenes gratis por mes
+ * Soporta imágenes y PDFs
  */
 async function extractTextWithGoogleVision(imageFile: File, onProgress?: (progress: number) => void): Promise<string> {
   if (!GOOGLE_VISION_API_KEY) {
@@ -64,11 +134,19 @@ async function extractTextWithGoogleVision(imageFile: File, onProgress?: (progre
   }
 
   console.log('🔍 Usando Google Cloud Vision API');
-  console.log(`📁 Archivo: ${imageFile.name}, tamaño: ${(imageFile.size / 1024).toFixed(2)} KB`);
+  console.log(`📁 Archivo: ${imageFile.name}, tipo: ${imageFile.type}, tamaño: ${(imageFile.size / 1024).toFixed(2)} KB`);
 
   if (onProgress) onProgress(20);
 
-  const base64 = await fileToBase64(imageFile);
+  // Si es PDF, convertir a imagen primero (Google Vision puede procesar PDFs directamente, pero es más complejo)
+  let fileToProcess = imageFile;
+  if (imageFile.type === 'application/pdf') {
+    console.log('📄 Archivo es PDF, convirtiendo a imagen...');
+    fileToProcess = await pdfToImage(imageFile);
+    if (onProgress) onProgress(40);
+  }
+
+  const base64 = await fileToBase64(fileToProcess);
   if (onProgress) onProgress(50);
 
   try {
@@ -335,31 +413,40 @@ async function extractWithPaddleOCR(imageFile: File, onProgress?: (progress: num
 }
 
 /**
- * Extrae texto de una imagen usando el servicio OCR configurado
+ * Extrae texto de una imagen o PDF usando el servicio OCR configurado
  * Para PaddleOCR, devuelve datos estructurados directamente
  */
 export async function extractTextFromImage(imageFile: File, onProgress?: (progress: number) => void): Promise<string> {
+  // Si es PDF, convertir a imagen primero
+  let fileToProcess = imageFile;
+  if (imageFile.type === 'application/pdf') {
+    console.log('📄 Archivo es PDF, convirtiendo a imagen para OCR...');
+    if (onProgress) onProgress(10);
+    fileToProcess = await pdfToImage(imageFile);
+    if (onProgress) onProgress(20);
+  }
+  
   try {
     switch (OCR_SERVICE) {
       case 'paddleocr':
         // PaddleOCR devuelve datos estructurados, pero mantenemos compatibilidad
         // con la interfaz que espera solo texto
-        const data = await extractWithPaddleOCR(imageFile, onProgress);
+        const data = await extractWithPaddleOCR(fileToProcess, onProgress);
         return data.rawText;
       case 'google':
-        return await extractTextWithGoogleVision(imageFile, onProgress);
+        return await extractTextWithGoogleVision(fileToProcess, onProgress);
       case 'ocrspace':
-        return await extractTextWithOCRSpace(imageFile, onProgress);
+        return await extractTextWithOCRSpace(fileToProcess, onProgress);
       case 'tesseract':
       default:
-        return await extractTextWithTesseract(imageFile, onProgress);
+        return await extractTextWithTesseract(fileToProcess, onProgress);
     }
   } catch (error) {
     console.error('Error en OCR:', error);
     // Fallback a Tesseract si la API falla
     if (OCR_SERVICE !== 'tesseract') {
       console.log('Fallback a Tesseract.js...');
-      return await extractTextWithTesseract(imageFile, onProgress);
+      return await extractTextWithTesseract(fileToProcess, onProgress);
     }
     throw error;
   }
@@ -368,15 +455,25 @@ export async function extractTextFromImage(imageFile: File, onProgress?: (progre
 /**
  * Extrae datos estructurados de una factura usando el servicio OCR configurado
  * Esta es la función principal para usar con PaddleOCR
+ * Soporta imágenes y PDFs
  */
 export async function extractInvoiceData(imageFile: File, onProgress?: (progress: number) => void): Promise<ExtractedInvoiceData> {
   console.log('🔍 extractInvoiceData - OCR_SERVICE:', OCR_SERVICE);
+  console.log(`📁 Archivo: ${imageFile.name}, tipo: ${imageFile.type}`);
   
   try {
     if (OCR_SERVICE === 'paddleocr') {
       console.log('✅ Usando PaddleOCR');
+      // Si es PDF, convertir a imagen primero
+      let fileToProcess = imageFile;
+      if (imageFile.type === 'application/pdf') {
+        console.log('📄 Archivo es PDF, convirtiendo a imagen para PaddleOCR...');
+        if (onProgress) onProgress(10);
+        fileToProcess = await pdfToImage(imageFile);
+        if (onProgress) onProgress(20);
+      }
       try {
-        return await extractWithPaddleOCR(imageFile, onProgress);
+        return await extractWithPaddleOCR(fileToProcess, onProgress);
       } catch (paddleError) {
         console.error('❌ Error con PaddleOCR:', paddleError);
         console.error('❌ No se hará fallback automático - revisa la conexión');

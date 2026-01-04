@@ -68,13 +68,13 @@ export default function FacturaNew() {
 
   async function handleProcessOCR() {
     if (!archivo) {
-      alert('Por favor, selecciona una imagen primero');
+      alert('Por favor, selecciona una imagen o PDF primero');
       return;
     }
 
-    // Solo procesar imágenes, no PDFs
-    if (!archivo.type.startsWith('image/')) {
-      alert('El OCR solo funciona con imágenes. Por favor, selecciona una imagen (JPG, PNG, etc.)');
+    // Procesar imágenes y PDFs
+    if (!archivo.type.startsWith('image/') && archivo.type !== 'application/pdf') {
+      alert('El OCR funciona con imágenes (JPG, PNG, etc.) o PDFs. Por favor, selecciona un archivo compatible.');
       return;
     }
 
@@ -225,7 +225,7 @@ export default function FacturaNew() {
               {archivo ? (
                 <div className="space-y-2">
                   <p className="text-emerald-400">{archivo.name}</p>
-                  {archivo.type.startsWith('image/') && (
+                  {(archivo.type.startsWith('image/') || archivo.type === 'application/pdf') && (
                     <button
                       type="button"
                       onClick={(e) => {
