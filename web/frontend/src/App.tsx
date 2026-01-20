@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileText, Plus, BarChart3, Home } from 'lucide-react';
+import { FileText, Plus, BarChart3, Home, LogOut, User } from 'lucide-react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
 import FacturasList from './pages/FacturasList';
 import FacturaEdit from './pages/FacturaEdit';
 import FacturaNew from './pages/FacturaNew';
@@ -27,6 +30,8 @@ function NavLink({ to, children, icon: Icon }: { to: string; children: React.Rea
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
@@ -51,6 +56,21 @@ function Layout({ children }: { children: React.ReactNode }) {
                 <Plus size={18} />
                 Facturar
               </Link>
+              
+              {/* Usuario y logout */}
+              <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-700/50">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <User size={18} />
+                  <span className="text-sm font-medium">{user?.username}</span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+                  title="Cerrar sesión"
+                >
+                  <LogOut size={18} />
+                </button>
+              </div>
             </nav>
           </div>
         </div>
@@ -66,19 +86,34 @@ function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Layout>
+    <AuthProvider>
+      <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/facturas" element={<FacturasList />} />
-          <Route path="/facturas/nueva" element={<FacturaNew />} />
-          <Route path="/facturas/batch" element={<FacturaBatch />} />
-          <Route path="/facturas/:id" element={<FacturaEdit />} />
-          <Route path="/facturar" element={<Facturar />} />
-          <Route path="/stats" element={<Dashboard />} />
+          {/* Ruta pública de login */}
+          <Route path="/login" element={<Login />} />
+          
+          {/* Rutas protegidas */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/facturas" element={<FacturasList />} />
+                    <Route path="/facturas/nueva" element={<FacturaNew />} />
+                    <Route path="/facturas/batch" element={<FacturaBatch />} />
+                    <Route path="/facturas/:id" element={<FacturaEdit />} />
+                    <Route path="/facturar" element={<Facturar />} />
+                    <Route path="/stats" element={<Dashboard />} />
+                  </Routes>
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
         </Routes>
-      </Layout>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

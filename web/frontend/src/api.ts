@@ -1,76 +1,65 @@
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  getDoc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  orderBy,
-  Timestamp 
-} from 'firebase/firestore';
-import { db } from './firebase';
 import { Factura, FacturaItem, Stats } from './types';
 
-const COLLECTION_NAME = 'facturas';
-const CLIENTES_COLLECTION = 'clientes';
-const EMISORES_COLLECTION = 'emisores';
-
-// Convertir documento de Firestore a Factura
-function docToFactura(docSnap: any): Factura {
-  const data = docSnap.data();
-  
-  // Parsear items si existen
-  let items: FacturaItem[] | undefined = undefined;
-  if (data.items && Array.isArray(data.items)) {
-    items = data.items.map((item: any) => ({
-      descripcion: item.descripcion || '',
-      cantidad: item.cantidad || 0,
-      precio_unitario: item.precio_unitario || 0,
-    }));
+// Obtener el ID del usuario actual desde localStorage
+function getCurrentUserId(): string | null {
+  const userStr = localStorage.getItem('facturacion_user');
+  if (!userStr) return null;
+  try {
+    const user = JSON.parse(userStr);
+    return user.id;
+  } catch {
+    return null;
   }
-  
-  return {
-    id: docSnap.id,
-    establecimiento: data.establecimiento || '',
-    fecha: data.fecha instanceof Timestamp ? data.fecha.toDate().toISOString().split('T')[0] : data.fecha,
-    total: data.total || 0,
-    subtotal: data.subtotal || 0,
-    iva: data.iva || 0,
-    tasa_iva: data.tasa_iva || 0.1,
-    concepto: data.concepto,
-    archivo: data.archivo,
-    fileUrl: data.fileUrl || '',
-    fileName: data.fileName || '',
-    tipo: data.tipo || 'recibida',
-    items: items,
-    cliente: data.cliente, // Cliente completo
-    from: data.from,
-    moneda: data.moneda,
-    formatoFecha: data.formatoFecha,
-    idioma: data.idioma,
-    numeroFactura: data.numeroFactura,
-    created_at: data.created_at instanceof Timestamp ? data.created_at.toDate().toISOString() : data.created_at,
-    updated_at: data.updated_at instanceof Timestamp ? data.updated_at.toDate().toISOString() : data.updated_at,
-  };
 }
 
+// Obtener la clave de almacenamiento para el usuario actual
+function getStorageKey(collection: string): string {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    throw new Error('Usuario no autenticado');
+  }
+  return `facturacion_${collection}_${userId}`;
+}
+
+// Facturas
+const FACTURAS_KEY = () => getStorageKey('facturas');
+const CLIENTES_KEY = () => getStorageKey('clientes');
+const EMISORES_KEY = () => getStorageKey('emisores');
+
+// Generar ID único
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// Facturas
 export async function getFacturas(): Promise<Factura[]> {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('fecha', 'desc'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(docToFactura);
+  try {
+    const key = FACTURAS_KEY();
+    const stored = localStorage.getItem(key);
+    if (!stored) return [];
+    
+    const facturas: Factura[] = JSON.parse(stored);
+    // Ordenar por fecha descendente
+    return facturas.sort((a, b) => {
+      const dateA = new Date(a.fecha).getTime();
+      const dateB = new Date(b.fecha).getTime();
+      return dateB - dateA;
+    });
+  } catch (error) {
+    console.error('Error loading facturas:', error);
+    return [];
+  }
 }
 
 export async function getFactura(id: string): Promise<Factura> {
-  const docRef = doc(db, COLLECTION_NAME, id);
-  const docSnap = await getDoc(docRef);
+  const facturas = await getFacturas();
+  const factura = facturas.find(f => f.id === id);
   
-  if (!docSnap.exists()) {
+  if (!factura) {
     throw new Error('Factura no encontrada');
   }
   
-  return docToFactura(docSnap);
+  return factura;
 }
 
 export async function createFactura(data: FormData): Promise<Factura> {
@@ -85,84 +74,64 @@ export async function createFactura(data: FormData): Promise<Factura> {
     }
   }
 
-  const facturaData: any = {
-    establecimiento: data.get('establecimiento') as string,
-    fecha: data.get('fecha') as string,
+  const now = new Date().toISOString();
+  const factura: Factura = {
+    id: generateId(),
+    establecimiento: (data.get('establecimiento') as string) || '',
+    fecha: (data.get('fecha') as string) || new Date().toISOString().split('T')[0],
     total: parseFloat(data.get('total') as string) || 0,
     subtotal: parseFloat(data.get('subtotal') as string) || 0,
     iva: parseFloat(data.get('iva') as string) || 0,
     tasa_iva: parseFloat(data.get('tasa_iva') as string) || 0.1,
-    concepto: data.get('concepto') as string || null,
-    archivo: data.get('archivo') ? (data.get('archivo') as File).name : null,
-    tipo: data.get('tipo') as string || 'recibida',
-    created_at: Timestamp.now(),
-    updated_at: Timestamp.now(),
+    concepto: (data.get('concepto') as string) || undefined,
+    archivo: data.get('archivo') ? (data.get('archivo') as File).name : undefined,
+    tipo: (data.get('tipo') as string) as 'recibida' | 'generada' || 'recibida',
+    items: items.length > 0 ? items : undefined,
+    cliente: (data.get('cliente') as string) || undefined,
+    from: (data.get('from') as string) || undefined,
+    moneda: (data.get('moneda') as string) || undefined,
+    formatoFecha: (data.get('formatoFecha') as string) || undefined,
+    idioma: (data.get('idioma') as string) || undefined,
+    numeroFactura: (data.get('numeroFactura') as string) || undefined,
+    created_at: now,
+    updated_at: now,
   };
 
-  // Agregar campos adicionales para facturas generadas
-  if (data.get('cliente')) {
-    facturaData.cliente = data.get('cliente') as string; // Guardar cliente completo
-  }
-  if (data.get('from')) {
-    facturaData.from = data.get('from') as string;
-  }
-  if (data.get('moneda')) {
-    facturaData.moneda = data.get('moneda') as string;
-  }
-  if (data.get('formatoFecha')) {
-    facturaData.formatoFecha = data.get('formatoFecha') as string;
-  }
-  if (data.get('idioma')) {
-    facturaData.idioma = data.get('idioma') as string;
-  }
-  if (data.get('numeroFactura')) {
-    facturaData.numeroFactura = data.get('numeroFactura') as string;
-  }
+  const facturas = await getFacturas();
+  facturas.push(factura);
   
-  // Guardar items si existen
-  if (items.length > 0) {
-    facturaData.items = items;
-  }
+  const key = FACTURAS_KEY();
+  localStorage.setItem(key, JSON.stringify(facturas));
   
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), facturaData);
-  
-  return {
-    id: docRef.id,
-    establecimiento: facturaData.establecimiento,
-    fecha: facturaData.fecha,
-    total: facturaData.total,
-    subtotal: facturaData.subtotal,
-    iva: facturaData.iva,
-    tasa_iva: facturaData.tasa_iva,
-    concepto: facturaData.concepto,
-    archivo: facturaData.archivo,
-    tipo: facturaData.tipo,
-    items: items.length > 0 ? items : undefined,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  } as Factura;
+  return factura;
 }
 
 export async function updateFactura(id: string, data: Partial<Factura>): Promise<Factura> {
-  const docRef = doc(db, COLLECTION_NAME, id);
+  const facturas = await getFacturas();
+  const index = facturas.findIndex(f => f.id === id);
   
-  const updateData = {
+  if (index === -1) {
+    throw new Error('Factura no encontrada');
+  }
+  
+  facturas[index] = {
+    ...facturas[index],
     ...data,
-    updated_at: Timestamp.now(),
+    updated_at: new Date().toISOString(),
   };
   
-  // Remove id from update data
-  delete (updateData as any).id;
-  delete (updateData as any).created_at;
+  const key = FACTURAS_KEY();
+  localStorage.setItem(key, JSON.stringify(facturas));
   
-  await updateDoc(docRef, updateData);
-  
-  return getFactura(id);
+  return facturas[index];
 }
 
 export async function deleteFactura(id: string): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, id);
-  await deleteDoc(docRef);
+  const facturas = await getFacturas();
+  const filtered = facturas.filter(f => f.id !== id);
+  
+  const key = FACTURAS_KEY();
+  localStorage.setItem(key, JSON.stringify(filtered));
 }
 
 export async function getStats(): Promise<Stats> {
@@ -204,82 +173,130 @@ export interface ClienteData {
   id?: string;
   nombre: string;
   datos: string;
-  ultimo_uso?: Timestamp;
+  ultimo_uso?: string;
 }
 
 export interface EmisorData {
   id?: string;
   nombre: string;
   datos: string;
-  ultimo_uso?: Timestamp;
+  ultimo_uso?: string;
 }
 
 export async function getClientes(): Promise<ClienteData[]> {
-  const q = query(collection(db, CLIENTES_COLLECTION), orderBy('ultimo_uso', 'desc'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  } as ClienteData));
+  try {
+    const key = CLIENTES_KEY();
+    const stored = localStorage.getItem(key);
+    if (!stored) return [];
+    
+    const clientes: ClienteData[] = JSON.parse(stored);
+    // Ordenar por último uso descendente
+    return clientes.sort((a, b) => {
+      const dateA = a.ultimo_uso ? new Date(a.ultimo_uso).getTime() : 0;
+      const dateB = b.ultimo_uso ? new Date(b.ultimo_uso).getTime() : 0;
+      return dateB - dateA;
+    });
+  } catch (error) {
+    console.error('Error loading clientes:', error);
+    return [];
+  }
 }
 
 export async function getEmisores(): Promise<EmisorData[]> {
-  const q = query(collection(db, EMISORES_COLLECTION), orderBy('ultimo_uso', 'desc'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  } as EmisorData));
+  try {
+    const key = EMISORES_KEY();
+    const stored = localStorage.getItem(key);
+    if (!stored) return [];
+    
+    const emisores: EmisorData[] = JSON.parse(stored);
+    // Ordenar por último uso descendente
+    return emisores.sort((a, b) => {
+      const dateA = a.ultimo_uso ? new Date(a.ultimo_uso).getTime() : 0;
+      const dateB = b.ultimo_uso ? new Date(b.ultimo_uso).getTime() : 0;
+      return dateB - dateA;
+    });
+  } catch (error) {
+    console.error('Error loading emisores:', error);
+    return [];
+  }
 }
 
 export async function saveCliente(cliente: Omit<ClienteData, 'id'>): Promise<string> {
-  const docRef = await addDoc(collection(db, CLIENTES_COLLECTION), {
+  const clientes = await getClientes();
+  const newCliente: ClienteData = {
     ...cliente,
-    ultimo_uso: Timestamp.now()
-  });
-  return docRef.id;
+    id: generateId(),
+    ultimo_uso: new Date().toISOString(),
+  };
+  
+  clientes.push(newCliente);
+  
+  const key = CLIENTES_KEY();
+  localStorage.setItem(key, JSON.stringify(clientes));
+  
+  return newCliente.id!;
 }
 
 export async function saveEmisor(emisor: Omit<EmisorData, 'id'>): Promise<string> {
-  const docRef = await addDoc(collection(db, EMISORES_COLLECTION), {
+  const emisores = await getEmisores();
+  const newEmisor: EmisorData = {
     ...emisor,
-    ultimo_uso: Timestamp.now()
-  });
-  return docRef.id;
+    id: generateId(),
+    ultimo_uso: new Date().toISOString(),
+  };
+  
+  emisores.push(newEmisor);
+  
+  const key = EMISORES_KEY();
+  localStorage.setItem(key, JSON.stringify(emisores));
+  
+  return newEmisor.id!;
 }
 
 export async function updateClienteUso(id: string): Promise<void> {
-  const docRef = doc(db, CLIENTES_COLLECTION, id);
-  await updateDoc(docRef, { ultimo_uso: Timestamp.now() });
+  const clientes = await getClientes();
+  const index = clientes.findIndex(c => c.id === id);
+  
+  if (index !== -1) {
+    clientes[index].ultimo_uso = new Date().toISOString();
+    const key = CLIENTES_KEY();
+    localStorage.setItem(key, JSON.stringify(clientes));
+  }
 }
 
 export async function updateEmisorUso(id: string): Promise<void> {
-  const docRef = doc(db, EMISORES_COLLECTION, id);
-  await updateDoc(docRef, { ultimo_uso: Timestamp.now() });
+  const emisores = await getEmisores();
+  const index = emisores.findIndex(e => e.id === id);
+  
+  if (index !== -1) {
+    emisores[index].ultimo_uso = new Date().toISOString();
+    const key = EMISORES_KEY();
+    localStorage.setItem(key, JSON.stringify(emisores));
+  }
 }
 
 export async function getUltimoCliente(): Promise<ClienteData | null> {
-  const q = query(collection(db, CLIENTES_COLLECTION), orderBy('ultimo_uso', 'desc'));
-  const querySnapshot = await getDocs(q);
-  if (querySnapshot.empty) return null;
-  const doc = querySnapshot.docs[0];
-  return { id: doc.id, ...doc.data() } as ClienteData;
+  const clientes = await getClientes();
+  return clientes.length > 0 ? clientes[0] : null;
 }
 
 export async function getUltimoEmisor(): Promise<EmisorData | null> {
-  const q = query(collection(db, EMISORES_COLLECTION), orderBy('ultimo_uso', 'desc'));
-  const querySnapshot = await getDocs(q);
-  if (querySnapshot.empty) return null;
-  const doc = querySnapshot.docs[0];
-  return { id: doc.id, ...doc.data() } as EmisorData;
+  const emisores = await getEmisores();
+  return emisores.length > 0 ? emisores[0] : null;
 }
 
 export async function deleteCliente(id: string): Promise<void> {
-  const docRef = doc(db, CLIENTES_COLLECTION, id);
-  await deleteDoc(docRef);
+  const clientes = await getClientes();
+  const filtered = clientes.filter(c => c.id !== id);
+  
+  const key = CLIENTES_KEY();
+  localStorage.setItem(key, JSON.stringify(filtered));
 }
 
 export async function deleteEmisor(id: string): Promise<void> {
-  const docRef = doc(db, EMISORES_COLLECTION, id);
-  await deleteDoc(docRef);
+  const emisores = await getEmisores();
+  const filtered = emisores.filter(e => e.id !== id);
+  
+  const key = EMISORES_KEY();
+  localStorage.setItem(key, JSON.stringify(filtered));
 }
