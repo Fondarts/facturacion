@@ -101,6 +101,7 @@ async function pdfToImage(pdfFile: File): Promise<File> {
     await page.render({
       canvasContext: context,
       viewport: viewport,
+      canvas: canvas,
     }).promise;
     
     // Convertir canvas a blob y luego a File
