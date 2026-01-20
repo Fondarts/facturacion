@@ -1,7 +1,20 @@
 import { Factura, FacturaItem, Stats } from './types';
 
+// Función helper para verificar si localStorage está disponible
+function isLocalStorageAvailable(): boolean {
+  try {
+    return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
 // Obtener el ID del usuario actual desde localStorage
 function getCurrentUserId(): string | null {
+  if (!isLocalStorageAvailable()) {
+    return null;
+  }
+
   const userStr = localStorage.getItem('facturacion_user');
   if (!userStr) return null;
   try {
@@ -33,6 +46,10 @@ function generateId(): string {
 
 // Facturas
 export async function getFacturas(): Promise<Factura[]> {
+  if (!isLocalStorageAvailable()) {
+    return [];
+  }
+
   try {
     const key = FACTURAS_KEY();
     const stored = localStorage.getItem(key);
@@ -63,6 +80,10 @@ export async function getFactura(id: string): Promise<Factura> {
 }
 
 export async function createFactura(data: FormData): Promise<Factura> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('localStorage no está disponible');
+  }
+
   // Parsear items si existen
   let items: FacturaItem[] = [];
   const itemsStr = data.get('items') as string;
@@ -107,6 +128,10 @@ export async function createFactura(data: FormData): Promise<Factura> {
 }
 
 export async function updateFactura(id: string, data: Partial<Factura>): Promise<Factura> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('localStorage no está disponible');
+  }
+
   const facturas = await getFacturas();
   const index = facturas.findIndex(f => f.id === id);
   
@@ -127,6 +152,10 @@ export async function updateFactura(id: string, data: Partial<Factura>): Promise
 }
 
 export async function deleteFactura(id: string): Promise<void> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('localStorage no está disponible');
+  }
+
   const facturas = await getFacturas();
   const filtered = facturas.filter(f => f.id !== id);
   
@@ -184,6 +213,10 @@ export interface EmisorData {
 }
 
 export async function getClientes(): Promise<ClienteData[]> {
+  if (!isLocalStorageAvailable()) {
+    return [];
+  }
+
   try {
     const key = CLIENTES_KEY();
     const stored = localStorage.getItem(key);
@@ -203,6 +236,10 @@ export async function getClientes(): Promise<ClienteData[]> {
 }
 
 export async function getEmisores(): Promise<EmisorData[]> {
+  if (!isLocalStorageAvailable()) {
+    return [];
+  }
+
   try {
     const key = EMISORES_KEY();
     const stored = localStorage.getItem(key);
@@ -222,6 +259,10 @@ export async function getEmisores(): Promise<EmisorData[]> {
 }
 
 export async function saveCliente(cliente: Omit<ClienteData, 'id'>): Promise<string> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('localStorage no está disponible');
+  }
+
   const clientes = await getClientes();
   const newCliente: ClienteData = {
     ...cliente,
@@ -238,6 +279,10 @@ export async function saveCliente(cliente: Omit<ClienteData, 'id'>): Promise<str
 }
 
 export async function saveEmisor(emisor: Omit<EmisorData, 'id'>): Promise<string> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('localStorage no está disponible');
+  }
+
   const emisores = await getEmisores();
   const newEmisor: EmisorData = {
     ...emisor,
@@ -254,6 +299,10 @@ export async function saveEmisor(emisor: Omit<EmisorData, 'id'>): Promise<string
 }
 
 export async function updateClienteUso(id: string): Promise<void> {
+  if (!isLocalStorageAvailable()) {
+    return;
+  }
+
   const clientes = await getClientes();
   const index = clientes.findIndex(c => c.id === id);
   
@@ -265,6 +314,10 @@ export async function updateClienteUso(id: string): Promise<void> {
 }
 
 export async function updateEmisorUso(id: string): Promise<void> {
+  if (!isLocalStorageAvailable()) {
+    return;
+  }
+
   const emisores = await getEmisores();
   const index = emisores.findIndex(e => e.id === id);
   
@@ -286,6 +339,10 @@ export async function getUltimoEmisor(): Promise<EmisorData | null> {
 }
 
 export async function deleteCliente(id: string): Promise<void> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('localStorage no está disponible');
+  }
+
   const clientes = await getClientes();
   const filtered = clientes.filter(c => c.id !== id);
   
@@ -294,6 +351,10 @@ export async function deleteCliente(id: string): Promise<void> {
 }
 
 export async function deleteEmisor(id: string): Promise<void> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('localStorage no está disponible');
+  }
+
   const emisores = await getEmisores();
   const filtered = emisores.filter(e => e.id !== id);
   

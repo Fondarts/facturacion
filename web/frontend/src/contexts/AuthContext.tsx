@@ -31,8 +31,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Función helper para verificar si localStorage está disponible
+  const isLocalStorageAvailable = (): boolean => {
+    try {
+      return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+    } catch {
+      return false;
+    }
+  };
+
   // Inicializar usuarios en localStorage si no existen
   useEffect(() => {
+    if (!isLocalStorageAvailable()) {
+      setIsLoading(false);
+      return;
+    }
+
     const existingUsers = localStorage.getItem(USERS_STORAGE_KEY);
     if (!existingUsers) {
       // Crear usuario por defecto
@@ -43,6 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Cargar usuario desde localStorage al iniciar
   useEffect(() => {
+    if (!isLocalStorageAvailable()) {
+      setIsLoading(false);
+      return;
+    }
+
     const storedUser = localStorage.getItem(STORAGE_KEY);
     if (storedUser) {
       try {
@@ -57,6 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
+    if (!isLocalStorageAvailable()) {
+      return false;
+    }
+
     try {
       // Obtener usuarios del localStorage
       const usersStr = localStorage.getItem(USERS_STORAGE_KEY);
@@ -89,7 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    if (isLocalStorageAvailable()) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   };
 
   return (
