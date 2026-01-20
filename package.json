@@ -1,0 +1,10 @@
+{
+  "name": "facturacion-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd web/frontend && npm ci && npm run build",
+    "dev": "cd web/frontend && npm run dev",
+    "install": "cd web/frontend && npm install"
+  }
+}
