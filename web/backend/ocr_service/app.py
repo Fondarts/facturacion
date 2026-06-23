@@ -125,23 +125,61 @@ def preprocess_image(image):
 
 def image_from_base64(base64_string):
     """Convierte base64 a imagen y la preprocesa"""
-    if ',' in base64_string:
-        base64_string = base64_string.split(',')[1]
-    
-    image_data = base64.b64decode(base64_string)
-    image = Image.open(io.BytesIO(image_data))
-    
-    # Convertir a RGB si es necesario
-    if image.mode != 'RGB':
-        image = image.convert('RGB')
-    
-    # Convertir a numpy array
-    image_array = np.array(image)
-    
-    # Preprocesar la imagen para mejorar OCR
-    processed_image = preprocess_image(image_array)
-    
-    return processed_image
+    try:
+        # Limpiar el string base64
+        if ',' in base64_string:
+            base64_string = base64_string.split(',')[1]
+        
+        # Eliminar espacios y saltos de línea
+        base64_string = base64_string.strip().replace(' ', '').replace('\n', '').replace('\r', '')
+        
+        # Decodificar base64
+        try:
+            image_data = base64.b64decode(base64_string, validate=True)
+        except Exception as e:
+            print(f"❌ Error decodificando base64: {e}")
+            raise ValueError(f"Base64 inválido: {e}")
+        
+        # Verificar que hay datos
+        if len(image_data) == 0:
+            raise ValueError("Imagen base64 vacía")
+        
+        # Abrir imagen
+        try:
+            image = Image.open(io.BytesIO(image_data))
+            # Verificar que es una imagen válida
+            image.verify()
+        except Exception as e:
+            print(f"❌ Error abriendo imagen: {e}")
+            print(f"📷 Tamaño de datos decodificados: {len(image_data)} bytes")
+            # Intentar detectar el formato
+            if image_data[:4] == b'\x89PNG':
+                print("   Formato detectado: PNG")
+            elif image_data[:2] == b'\xff\xd8':
+                print("   Formato detectado: JPEG")
+            elif image_data[:4] == b'%PDF':
+                print("   Formato detectado: PDF (no soportado directamente, debe convertirse primero)")
+            raise ValueError(f"No se pudo identificar el formato de imagen: {e}")
+        
+        # Reabrir la imagen (verify() cierra el archivo)
+        image = Image.open(io.BytesIO(image_data))
+        
+        # Convertir a RGB si es necesario
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Convertir a numpy array
+        image_array = np.array(image)
+        
+        # Preprocesar la imagen para mejorar OCR
+        processed_image = preprocess_image(image_array)
+        
+        return processed_image
+    except Exception as e:
+        print(f"❌ Error en image_from_base64: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def extract_invoice_data_from_structure(structure_result):
     """

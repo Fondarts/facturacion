@@ -252,8 +252,8 @@ export default function FacturaBatch() {
           <ArrowLeft size={20} />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">Ingresar Facturas en Lote</h1>
-          <p className="text-slate-400">Procesa hasta 10 facturas a la vez</p>
+          <h1 className="text-2xl font-bold text-white">Ingresar Gastos en Lote</h1>
+          <p className="text-slate-400">Procesa hasta 10 gastos a la vez</p>
         </div>
         {invoices.length > 0 && (
           <div className="flex gap-2">

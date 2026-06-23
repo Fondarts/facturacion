@@ -89,8 +89,11 @@ web/frontend/dist/
 web/frontend/node_modules/
 web/backend/node_modules/
 
-# Environment variables
-web/frontend/.env
-web/frontend/.env.local
-web/frontend/.env.*.local
+# Environment variables (cualquier .env en el repo, NUNCA commitear secretos)
+.env
+**/.env
+**/.env.local
+**/.env.*.local
+# se permiten las plantillas de ejemplo
+!**/.env.example
 

@@ -1,89 +1,48 @@
 import { Factura, FacturaItem, Stats } from './types';
+import {
+  readJson,
+  writeJson,
+  uploadImage,
+  deleteFile,
+  buildImageName,
+} from './services/driveStorage';
 
-// Función helper para verificar si localStorage está disponible
-function isLocalStorageAvailable(): boolean {
-  try {
-    return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
-  } catch {
-    return false;
-  }
-}
-
-// Obtener el ID del usuario actual desde localStorage
-function getCurrentUserId(): string | null {
-  if (!isLocalStorageAvailable()) {
-    return null;
-  }
-
-  const userStr = localStorage.getItem('facturacion_user');
-  if (!userStr) return null;
-  try {
-    const user = JSON.parse(userStr);
-    return user.id;
-  } catch {
-    return null;
-  }
-}
-
-// Obtener la clave de almacenamiento para el usuario actual
-function getStorageKey(collection: string): string {
-  const userId = getCurrentUserId();
-  if (!userId) {
-    throw new Error('Usuario no autenticado');
-  }
-  return `facturacion_${collection}_${userId}`;
-}
-
-// Facturas
-const FACTURAS_KEY = () => getStorageKey('facturas');
-const CLIENTES_KEY = () => getStorageKey('clientes');
-const EMISORES_KEY = () => getStorageKey('emisores');
+// Nombres de los archivos de datos dentro de la subcarpeta _datos de Drive
+const FACTURAS_FILE = 'facturas.json';
+const CLIENTES_FILE = 'clientes.json';
+const EMISORES_FILE = 'emisores.json';
 
 // Generar ID único
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-// Facturas
-export async function getFacturas(): Promise<Factura[]> {
-  if (!isLocalStorageAvailable()) {
-    return [];
-  }
+// ==================== FACTURAS ====================
 
+export async function getFacturas(): Promise<Factura[]> {
   try {
-    const key = FACTURAS_KEY();
-    const stored = localStorage.getItem(key);
-    if (!stored) return [];
-    
-    const facturas: Factura[] = JSON.parse(stored);
-    // Ordenar por fecha descendente
+    const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
     return facturas.sort((a, b) => {
       const dateA = new Date(a.fecha).getTime();
       const dateB = new Date(b.fecha).getTime();
       return dateB - dateA;
     });
   } catch (error) {
-    console.error('Error loading facturas:', error);
+    console.error('Error cargando facturas desde Drive:', error);
     return [];
   }
 }
 
 export async function getFactura(id: string): Promise<Factura> {
   const facturas = await getFacturas();
-  const factura = facturas.find(f => f.id === id);
-  
+  const factura = facturas.find((f) => f.id === id);
   if (!factura) {
     throw new Error('Factura no encontrada');
   }
-  
   return factura;
 }
 
 export async function createFactura(data: FormData): Promise<Factura> {
-  if (!isLocalStorageAvailable()) {
-    throw new Error('localStorage no está disponible');
-  }
-
   // Parsear items si existen
   let items: FacturaItem[] = [];
   const itemsStr = data.get('items') as string;
@@ -95,18 +54,33 @@ export async function createFactura(data: FormData): Promise<Factura> {
     }
   }
 
+  const establecimiento = (data.get('establecimiento') as string) || '';
+  const fecha = (data.get('fecha') as string) || new Date().toISOString().split('T')[0];
+
+  // Subir la imagen/PDF a Drive (si vino una)
+  let driveFileId: string | undefined;
+  let fileName: string | undefined;
+  const archivo = data.get('archivo');
+  if (archivo instanceof File && archivo.size > 0) {
+    fileName = archivo.name;
+    const niceName = buildImageName(establecimiento, fecha, archivo.name);
+    driveFileId = await uploadImage(archivo, niceName, fecha);
+  }
+
   const now = new Date().toISOString();
   const factura: Factura = {
     id: generateId(),
-    establecimiento: (data.get('establecimiento') as string) || '',
-    fecha: (data.get('fecha') as string) || new Date().toISOString().split('T')[0],
+    establecimiento,
+    fecha,
     total: parseFloat(data.get('total') as string) || 0,
     subtotal: parseFloat(data.get('subtotal') as string) || 0,
     iva: parseFloat(data.get('iva') as string) || 0,
     tasa_iva: parseFloat(data.get('tasa_iva') as string) || 0.1,
     concepto: (data.get('concepto') as string) || undefined,
-    archivo: data.get('archivo') ? (data.get('archivo') as File).name : undefined,
-    tipo: (data.get('tipo') as string) as 'recibida' | 'generada' || 'recibida',
+    archivo: fileName,
+    fileName,
+    driveFileId,
+    tipo: ((data.get('tipo') as string) as 'recibida' | 'generada') || 'recibida',
     items: items.length > 0 ? items : undefined,
     cliente: (data.get('cliente') as string) || undefined,
     from: (data.get('from') as string) || undefined,
@@ -118,64 +92,56 @@ export async function createFactura(data: FormData): Promise<Factura> {
     updated_at: now,
   };
 
-  const facturas = await getFacturas();
+  const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
   facturas.push(factura);
-  
-  const key = FACTURAS_KEY();
-  localStorage.setItem(key, JSON.stringify(facturas));
-  
+  await writeJson(FACTURAS_FILE, facturas);
+
   return factura;
 }
 
 export async function updateFactura(id: string, data: Partial<Factura>): Promise<Factura> {
-  if (!isLocalStorageAvailable()) {
-    throw new Error('localStorage no está disponible');
-  }
-
-  const facturas = await getFacturas();
-  const index = facturas.findIndex(f => f.id === id);
-  
+  const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
+  const index = facturas.findIndex((f) => f.id === id);
   if (index === -1) {
     throw new Error('Factura no encontrada');
   }
-  
+
   facturas[index] = {
     ...facturas[index],
     ...data,
     updated_at: new Date().toISOString(),
   };
-  
-  const key = FACTURAS_KEY();
-  localStorage.setItem(key, JSON.stringify(facturas));
-  
+
+  await writeJson(FACTURAS_FILE, facturas);
   return facturas[index];
 }
 
 export async function deleteFactura(id: string): Promise<void> {
-  if (!isLocalStorageAvailable()) {
-    throw new Error('localStorage no está disponible');
-  }
+  const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
+  const target = facturas.find((f) => f.id === id);
+  const filtered = facturas.filter((f) => f.id !== id);
+  await writeJson(FACTURAS_FILE, filtered);
 
-  const facturas = await getFacturas();
-  const filtered = facturas.filter(f => f.id !== id);
-  
-  const key = FACTURAS_KEY();
-  localStorage.setItem(key, JSON.stringify(filtered));
+  // Borrar la imagen asociada en Drive (best-effort)
+  if (target?.driveFileId) {
+    try {
+      await deleteFile(target.driveFileId);
+    } catch (e) {
+      console.warn('No se pudo borrar la imagen en Drive:', e);
+    }
+  }
 }
 
 export async function getStats(): Promise<Stats> {
   const facturas = await getFacturas();
-  
-  const recibidas = facturas.filter(f => f.tipo === 'recibida');
-  
+  const recibidas = facturas.filter((f) => f.tipo === 'recibida');
+
   const totalFacturas = facturas.length;
   const totalGastado = recibidas.reduce((sum, f) => sum + (f.total || 0), 0);
   const totalIva = recibidas.reduce((sum, f) => sum + (f.iva || 0), 0);
-  
-  // Agrupar por mes
+
   const porMesMap = new Map<string, { total: number; cantidad: number }>();
-  
-  recibidas.forEach(f => {
+  recibidas.forEach((f) => {
     const mes = f.fecha?.substring(0, 7) || 'unknown';
     const existing = porMesMap.get(mes) || { total: 0, cantidad: 0 };
     porMesMap.set(mes, {
@@ -183,21 +149,17 @@ export async function getStats(): Promise<Stats> {
       cantidad: existing.cantidad + 1,
     });
   });
-  
+
   const porMes = Array.from(porMesMap.entries())
     .map(([mes, data]) => ({ mes, ...data }))
     .sort((a, b) => b.mes.localeCompare(a.mes))
     .slice(0, 12);
-  
-  return {
-    totalFacturas,
-    totalGastado,
-    totalIva,
-    porMes,
-  };
+
+  return { totalFacturas, totalGastado, totalIva, porMes };
 }
 
-// Clientes y Emisores
+// ==================== CLIENTES Y EMISORES ====================
+
 export interface ClienteData {
   id?: string;
   nombre: string;
@@ -212,119 +174,63 @@ export interface EmisorData {
   ultimo_uso?: string;
 }
 
-export async function getClientes(): Promise<ClienteData[]> {
-  if (!isLocalStorageAvailable()) {
-    return [];
-  }
+function sortByUso<T extends { ultimo_uso?: string }>(arr: T[]): T[] {
+  return arr.sort((a, b) => {
+    const dateA = a.ultimo_uso ? new Date(a.ultimo_uso).getTime() : 0;
+    const dateB = b.ultimo_uso ? new Date(b.ultimo_uso).getTime() : 0;
+    return dateB - dateA;
+  });
+}
 
+export async function getClientes(): Promise<ClienteData[]> {
   try {
-    const key = CLIENTES_KEY();
-    const stored = localStorage.getItem(key);
-    if (!stored) return [];
-    
-    const clientes: ClienteData[] = JSON.parse(stored);
-    // Ordenar por último uso descendente
-    return clientes.sort((a, b) => {
-      const dateA = a.ultimo_uso ? new Date(a.ultimo_uso).getTime() : 0;
-      const dateB = b.ultimo_uso ? new Date(b.ultimo_uso).getTime() : 0;
-      return dateB - dateA;
-    });
+    return sortByUso(await readJson<ClienteData[]>(CLIENTES_FILE, []));
   } catch (error) {
-    console.error('Error loading clientes:', error);
+    console.error('Error cargando clientes desde Drive:', error);
     return [];
   }
 }
 
 export async function getEmisores(): Promise<EmisorData[]> {
-  if (!isLocalStorageAvailable()) {
-    return [];
-  }
-
   try {
-    const key = EMISORES_KEY();
-    const stored = localStorage.getItem(key);
-    if (!stored) return [];
-    
-    const emisores: EmisorData[] = JSON.parse(stored);
-    // Ordenar por último uso descendente
-    return emisores.sort((a, b) => {
-      const dateA = a.ultimo_uso ? new Date(a.ultimo_uso).getTime() : 0;
-      const dateB = b.ultimo_uso ? new Date(b.ultimo_uso).getTime() : 0;
-      return dateB - dateA;
-    });
+    return sortByUso(await readJson<EmisorData[]>(EMISORES_FILE, []));
   } catch (error) {
-    console.error('Error loading emisores:', error);
+    console.error('Error cargando emisores desde Drive:', error);
     return [];
   }
 }
 
 export async function saveCliente(cliente: Omit<ClienteData, 'id'>): Promise<string> {
-  if (!isLocalStorageAvailable()) {
-    throw new Error('localStorage no está disponible');
-  }
-
-  const clientes = await getClientes();
-  const newCliente: ClienteData = {
-    ...cliente,
-    id: generateId(),
-    ultimo_uso: new Date().toISOString(),
-  };
-  
+  const clientes = await readJson<ClienteData[]>(CLIENTES_FILE, []);
+  const newCliente: ClienteData = { ...cliente, id: generateId(), ultimo_uso: new Date().toISOString() };
   clientes.push(newCliente);
-  
-  const key = CLIENTES_KEY();
-  localStorage.setItem(key, JSON.stringify(clientes));
-  
+  await writeJson(CLIENTES_FILE, clientes);
   return newCliente.id!;
 }
 
 export async function saveEmisor(emisor: Omit<EmisorData, 'id'>): Promise<string> {
-  if (!isLocalStorageAvailable()) {
-    throw new Error('localStorage no está disponible');
-  }
-
-  const emisores = await getEmisores();
-  const newEmisor: EmisorData = {
-    ...emisor,
-    id: generateId(),
-    ultimo_uso: new Date().toISOString(),
-  };
-  
+  const emisores = await readJson<EmisorData[]>(EMISORES_FILE, []);
+  const newEmisor: EmisorData = { ...emisor, id: generateId(), ultimo_uso: new Date().toISOString() };
   emisores.push(newEmisor);
-  
-  const key = EMISORES_KEY();
-  localStorage.setItem(key, JSON.stringify(emisores));
-  
+  await writeJson(EMISORES_FILE, emisores);
   return newEmisor.id!;
 }
 
 export async function updateClienteUso(id: string): Promise<void> {
-  if (!isLocalStorageAvailable()) {
-    return;
-  }
-
-  const clientes = await getClientes();
-  const index = clientes.findIndex(c => c.id === id);
-  
+  const clientes = await readJson<ClienteData[]>(CLIENTES_FILE, []);
+  const index = clientes.findIndex((c) => c.id === id);
   if (index !== -1) {
     clientes[index].ultimo_uso = new Date().toISOString();
-    const key = CLIENTES_KEY();
-    localStorage.setItem(key, JSON.stringify(clientes));
+    await writeJson(CLIENTES_FILE, clientes);
   }
 }
 
 export async function updateEmisorUso(id: string): Promise<void> {
-  if (!isLocalStorageAvailable()) {
-    return;
-  }
-
-  const emisores = await getEmisores();
-  const index = emisores.findIndex(e => e.id === id);
-  
+  const emisores = await readJson<EmisorData[]>(EMISORES_FILE, []);
+  const index = emisores.findIndex((e) => e.id === id);
   if (index !== -1) {
     emisores[index].ultimo_uso = new Date().toISOString();
-    const key = EMISORES_KEY();
-    localStorage.setItem(key, JSON.stringify(emisores));
+    await writeJson(EMISORES_FILE, emisores);
   }
 }
 
@@ -339,25 +245,11 @@ export async function getUltimoEmisor(): Promise<EmisorData | null> {
 }
 
 export async function deleteCliente(id: string): Promise<void> {
-  if (!isLocalStorageAvailable()) {
-    throw new Error('localStorage no está disponible');
-  }
-
-  const clientes = await getClientes();
-  const filtered = clientes.filter(c => c.id !== id);
-  
-  const key = CLIENTES_KEY();
-  localStorage.setItem(key, JSON.stringify(filtered));
+  const clientes = await readJson<ClienteData[]>(CLIENTES_FILE, []);
+  await writeJson(CLIENTES_FILE, clientes.filter((c) => c.id !== id));
 }
 
 export async function deleteEmisor(id: string): Promise<void> {
-  if (!isLocalStorageAvailable()) {
-    throw new Error('localStorage no está disponible');
-  }
-
-  const emisores = await getEmisores();
-  const filtered = emisores.filter(e => e.id !== id);
-  
-  const key = EMISORES_KEY();
-  localStorage.setItem(key, JSON.stringify(filtered));
+  const emisores = await readJson<EmisorData[]>(EMISORES_FILE, []);
+  await writeJson(EMISORES_FILE, emisores.filter((e) => e.id !== id));
 }

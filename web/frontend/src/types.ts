@@ -8,8 +8,9 @@ export interface Factura {
   tasa_iva: number;
   concepto?: string;
   archivo?: string;
-  fileUrl?: string; // URL del archivo en Firebase Storage
+  fileUrl?: string; // URL pública del archivo (legado / Firebase Storage)
   fileName?: string;
+  driveFileId?: string; // ID del archivo en Google Drive (almacén actual)
   tipo: 'recibida' | 'generada';
   created_at: string;
   updated_at: string;

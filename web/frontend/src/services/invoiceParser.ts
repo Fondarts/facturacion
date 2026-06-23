@@ -360,10 +360,11 @@ function extractEstablishment(lines: string[]): string | null {
 
 function extractDate(text: string): Date | null {
   const datePatterns = [
-    /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/,
+    // ISO (YYYY-MM-DD) PRIMERO: si no, "2025-06-05" se interpretaba como 2005-06-25
     /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/,
-    /FECHA[:\\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i,
-    /Fecha\s+de\s+factura[:\\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i,
+    /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/,
+    /FECHA[:\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i,
+    /Fecha\s+de\s+factura[:\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i,
     /(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+de\s+(\d{2,4})/i,
   ];
 
@@ -425,213 +426,393 @@ function extractMonetaryValues(text: string, lines: string[]): MonetaryValues {
   let tax: number | null = null;
   let taxRate: number | null = null;
 
-  const totalPatterns = [
-    // Patrones más específicos primero (mayor prioridad)
-    // PRIORIDAD 1: Total con impuestos incluidos (más confiable)
-    /TOTAL\s*\(Impuestos\s*Incl\.?\)[^\n]*?([\d]+[.,]\d{2})\s*€?/i, // "Total (Impuestos Incl.) 32,60"
-    /TOTAL\s*\(Imp\.?\s*Incl\.?\)[^\n]*?([\d]+[.,]\d{2})\s*€?/i, // "Total (Imp. Incl.) 32,60"
-    /TOTAL\s+CON\s+IVA[^\n]*?([\d]+[.,]\d{2})\s*€?/i, // "TOTAL CON IVA 32,60"
-    // PRIORIDAD 2: Total a pagar
-    /TOTAL\s+A\s+PAGAR[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
-    /TOTAL\s+EUR[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
-    // PRIORIDAD 3: Total genérico (menos confiable, puede ser sin impuestos)
-    /TOTAL\s*:?\s*([\d]+[.,]\d{2})\s*€?/i, // "TOTAL 93,30" o "TOTAL: 93,30"
-    /(?:^|\n)\s*TOTAL\s+([\d]+[.,]\d{2})\s*€?/i, // "TOTAL 93,30" en nueva línea
-    /(?:^|\n)[^S\n]*TOTAL\s*:?\s*€?\s*([\d]+[.,]\d{2})/i,
-    // Patrones para texto mal formateado del OCR
-    /VISA[^\n]*?([\d]+[.,]\d{2})\s*[€,0]?/i, // "VISA — 118,80"
-    /TARJETA[^\n]*?([\d]+[.,]\d{2})\s*€?/i, // "TARJETA 118,80"
-    /ENTREGADO[^\n]*?([\d]+[.,]\d{2})\s*€?/i, // "ENTREGADO 118,80"
-  ];
+  // REGLAS FUNDAMENTALES:
+  // 1. IVA < Subtotal y IVA < Total
+  // 2. Tasa IVA <= 35%
+  // 3. "Sin IVA", "Base imp", "Neto", "Subtotal", "Base imponible", "Base" = TODOS son SUBTOTAL
+  // 4. IVA, tasa IVA, subtotal y total nunca negativos
+  // 5. Subtotal + IVA = Total
 
-  const subtotalPatterns = [
-    // Patrones más específicos primero
-    /BASE\s*IMPONIBLE\s*:?\s*([\d]+[.,]\d{2})\s*€?/i, // "Base Imponible: 84,82"
-    /BASE\s*IMPONIBLE[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
-    /B\.?IMPONIBLE\s*:?\s*([\d]+[.,]\d{2})\s*€?/i, // "B.IMPONIBLE: 84,82"
-    /B\.?IMPONIBLE[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
-    /(?<!de )Subtotal\s*:?\s*([\d]+[.,]\d{2})\s*€?/i,
-    /Base\s*:[^\n]*?([\d]+[.,]\d{2})\s*€?/i,
-    /\d+\s*%\s*:?\s*Base\s*:?\s*([\d]+[.,]\d{2})\s*€?/i,
-    // Patrones para texto mal formateado del OCR
-    /BAS\s+([\d]+[.,]\d{2})\s+\d+%/i, // "BAS 108,00 10%"
-    /BASE\s+([\d]+[.,]\d{2})\s+\d+%/i, // "BASE 108,00 10%"
-  ];
-
-  const taxPatterns = [
-    // Patrones más específicos primero - buscar "IMP.IVA" o "IMP IVA" seguido de número
-    // NOTA: Estos patrones se usan como fallback, la búsqueda en líneas separadas tiene prioridad
-    // PRIORIDAD 1: "Cuota" (muy específico para IVA)
-    /CUOTA\s*:?\s*([\d]+[.,]\d{2})\s*€?/i, // "Cuota: 2,96" o "10%: Base: 29,64 € Cuota: 2,96 €"
-    /\d+%\s*:?\s*Base[^\n]*?Cuota\s*:?\s*([\d]+[.,]\d{2})\s*€?/i, // "10%: Base: 29,64 € Cuota: 2,96 €"
-    /IMP\.?\s*IVA\s*:?\s*([\d]+[.,]\d{2})\s*€?(?!\s*[0-9])/i, // "IMP.IVA: 8,48" - evitar capturar si hay más números después
-    /IMPORTE\s*IVA\s*:?\s*([\d.,]+)\s*€?/i,
-    /I\.?V\.?A\.?\s*([\d.,]+)\s*%\s+([\d.,]+)(?!\s*[,)])/i,
-    /I\.?V\.?A\.?\s*\d+[,.]?\d*\s*%[^(s/][^\n]*?([\d]+[.,]\d{2})\s*€?/i,
-    /Impuesto\s*:?\s*([\d]+[.,]\d{2})\s*€?/i,
-    /(?<!\()IVA\s*:?\s*([\d]+[.,]\d{2})\s*€?(?!\))/i,
-    // Patrones para texto mal formateado del OCR - pero con validación de que el IVA sea menor que el subtotal
-    /\d+%\s+([\d]+[.,]\d{2})\s*[€W]?(?!\s*[0-9])/i, // "10% 10,80" - evitar capturar si hay más números después
-    /BAS\s+[\d.,]+\s+\d+%\s+([\d]+[.,]\d{2})(?!\s*[0-9])/i, // "BAS 108,00 10% 10,80"
-  ];
-
-  const taxRatePatterns = [
-    /I\.?V\.?A\.?\s*([\d.,]+)\s*%/i,
-    /([\d.,]+)\s*%\s*:?\s*Base/i,
-    /IVA\s*(\d+)%/i,
-    // Patrones para texto mal formateado del OCR
-    /BAS\s+[\d.,]+\s+(\d+)%/i, // "BAS 108,00 10%"
-    /BASE\s+[\d.,]+\s+(\d+)%/i, // "BASE 108,00 10%"
-    /SE\s+IMP\s+IVA\s+(\d+)%/i, // "SE IMP IVA 10%"
-  ];
-
-  // PRIMERO: Buscar valores en formato multilínea (más preciso para valores en líneas separadas)
-  const multilineValues = extractFromMultilineFormat(lines);
-  if (multilineValues.subtotal != null) {
-    subtotal = multilineValues.subtotal;
-    console.log(`Subtotal encontrado en formato multilínea: ${subtotal}`);
-  }
-  if (multilineValues.tax != null) {
-    tax = multilineValues.tax;
-    console.log(`IVA encontrado en formato multilínea: ${tax}`);
-  }
-  if (multilineValues.total != null) {
-    total = multilineValues.total;
-    console.log(`Total encontrado en formato multilínea: ${total}`);
-  }
-  if (multilineValues.taxRate != null) {
-    taxRate = multilineValues.taxRate;
-    console.log(`Tasa IVA encontrada en formato multilínea: ${(taxRate * 100)}%`);
-  }
-
-  // SEGUNDO: Buscar con patrones regex solo si no se encontró en formato multilínea
-  // Buscar Total
-  if (total == null) {
-    for (const pattern of totalPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const value = parseSpanishNumber(match[1]);
-        if (value != null && value > 0) {
-          total = value;
-          console.log(`Total encontrado con patrón: ${pattern} -> ${value}`);
+  // PASO 1: Buscar SUBTOTAL primero (todas las variantes)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineUpper = line.toUpperCase();
+    
+    // Todas estas variantes son SUBTOTAL
+    const isSubtotalLine = 
+      (lineUpper.includes('SIN') && lineUpper.includes('IVA')) ||
+      lineUpper.includes('BASE IMPONIBLE') ||
+      lineUpper.includes('BASE IMP') ||
+      lineUpper.includes('NETO') ||
+      (lineUpper.includes('SUBTOTAL')) ||
+      (lineUpper.includes('BASE') && !lineUpper.includes('IMPORTE') && !lineUpper.includes('IVA') && !lineUpper.includes('TOTAL'));
+    
+    if (isSubtotalLine && subtotal == null) {
+      // Buscar número en la misma línea
+      const numbers = extractNumbers(line);
+      if (numbers.length > 0) {
+        const candidate = Math.max(...numbers);
+        if (candidate > 0 && candidate >= 10 && (total == null || candidate <= total)) {
+          subtotal = candidate;
+          console.log(`✅ Subtotal encontrado: ${subtotal} (de: ${line.substring(0, 40)})`);
           break;
         }
       }
-    }
-  }
-
-  // Buscar Subtotal
-  if (subtotal == null) {
-    for (const pattern of subtotalPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const value = parseSpanishNumber(match[1]);
-        if (value != null && value > 0) {
-          subtotal = value;
-          console.log(`Subtotal encontrado con patrón: ${pattern} -> ${value}`);
-          break;
-        }
-      }
-    }
-  }
-
-  // Buscar IVA - con validación de que sea razonable (menor que subtotal si existe)
-  if (tax == null) {
-    for (const pattern of taxPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const valueStr = match.length > 2 && match[2] ? match[2] : match[1];
-        const value = parseSpanishNumber(valueStr);
-        if (value != null && value > 0) {
-          // Validar que el IVA sea razonable (típicamente menor que el subtotal)
-          // Si ya tenemos subtotal, el IVA debería ser menor (típicamente 10-21% del subtotal)
-          if (subtotal != null) {
-            // El IVA nunca debería ser mayor o igual al subtotal
-            if (value >= subtotal) {
-              console.warn(`⚠️ IVA (${value}) >= Subtotal (${subtotal}), probablemente incorrecto, saltando...`);
-              continue; // Saltar este match, buscar otro
-            }
-            // El IVA debería ser aproximadamente 10-21% del subtotal
-            const expectedMin = subtotal * 0.04; // 4% mínimo
-            const expectedMax = subtotal * 0.25; // 25% máximo
-            if (value < expectedMin || value > expectedMax) {
-              console.warn(`⚠️ IVA (${value}) fuera del rango esperado (${expectedMin.toFixed(2)} - ${expectedMax.toFixed(2)}), saltando...`);
-              continue;
-            }
-          }
-          // Si ya tenemos total, el IVA no debería ser mayor que el total
-          if (total != null && value >= total) {
-            console.warn(`⚠️ IVA (${value}) >= Total (${total}), probablemente incorrecto, saltando...`);
-            continue;
-          }
-          tax = value;
-          console.log(`IVA encontrado con patrón: ${pattern} -> ${value}`);
-          break;
-        }
-      }
-    }
-  }
-
-  // Buscar Tasa de IVA
-  if (taxRate == null) {
-    for (const pattern of taxRatePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const value = parseSpanishNumber(match[1]);
-        if (value != null && value > 0 && value <= 100) {
-          taxRate = value / 100.0;
-          console.log(`Tasa IVA encontrada: ${value}%`);
-          break;
-        }
-      }
-    }
-  }
-  if (total == null && multilineValues.total != null) {
-    total = multilineValues.total;
-    console.log(`Total encontrado en formato multilínea: ${total}`);
-  }
-  if (subtotal == null && multilineValues.subtotal != null) {
-    subtotal = multilineValues.subtotal;
-    console.log(`Subtotal encontrado en formato multilínea: ${subtotal}`);
-  }
-  if (tax == null && multilineValues.tax != null) {
-    tax = multilineValues.tax;
-    console.log(`IVA encontrado en formato multilínea: ${tax}`);
-  }
-  if (taxRate == null && multilineValues.taxRate != null) {
-    taxRate = multilineValues.taxRate;
-    console.log(`Tasa IVA encontrada en formato multilínea: ${(multilineValues.taxRate! * 100)}%`);
-  }
-
-  // Si no encontramos valores con patrones específicos, buscar en formato tabla
-  if (total == null || subtotal == null || tax == null) {
-    const tableValues = extractFromTableFormat(lines);
-    if (total == null && tableValues.total != null) total = tableValues.total;
-    if (subtotal == null && tableValues.subtotal != null) subtotal = tableValues.subtotal;
-    if (tax == null && tableValues.tax != null) tax = tableValues.tax;
-    if (taxRate == null && tableValues.taxRate != null) taxRate = tableValues.taxRate;
-  }
-
-  // Búsqueda inteligente adicional: buscar líneas con formato "BAS X 10% Y" o similar
-  if (subtotal == null || tax == null || taxRate == null) {
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].toUpperCase();
-      // Buscar formato: "BAS 108,00 10% 10,80" o "BASE 108,00 10% 10,80"
-      const basPattern = /BAS\s+([\d]+[.,]\d{2})\s+(\d+)%\s+([\d]+[.,]\d{2})/i;
-      const match = line.match(basPattern);
-      if (match) {
-        const baseValue = parseSpanishNumber(match[1]);
-        const rateValue = parseFloat(match[2]);
-        const taxValue = parseSpanishNumber(match[3]);
+      
+      // Buscar en línea siguiente (hasta 8 líneas siguientes para estructuras tabulares)
+      for (let j = i + 1; j < Math.min(i + 9, lines.length); j++) {
+        const nextLine = lines[j];
+        const nextLineUpper = nextLine.toUpperCase();
         
-        if (baseValue != null && rateValue != null && taxValue != null) {
-          if (subtotal == null) subtotal = baseValue;
-          if (taxRate == null) taxRate = rateValue / 100.0;
-          if (tax == null) tax = taxValue;
-          console.log(`Valores extraídos de formato BAS: Base=${subtotal}, Tasa=${rateValue}%, IVA=${tax}`);
+        // Si encontramos "TOTAL" sin números antes, probablemente pasamos la sección de subtotal
+        if (nextLineUpper.includes('TOTAL') && !nextLineUpper.match(/\d/)) {
+          break;
+        }
+        
+        // Si contiene "IVA" sin números, probablemente es una etiqueta, continuar
+        if (nextLineUpper.includes('IVA') && !nextLine.match(/\d/)) {
+          continue;
+        }
+        
+        const nextNumbers = extractNumbers(nextLine);
+        if (nextNumbers.length > 0) {
+          // En estructuras como "Base / % IVA / IMP.IVA" o "40,00 / 10,00 / 4,00"
+          // El primer número grande (>= 10) es la base (subtotal)
+          const validNumbers = nextNumbers.filter(n => n >= 10);
+          if (validNumbers.length > 0) {
+            const candidate = Math.max(...validNumbers);
+            if (candidate > 0 && (total == null || candidate <= total)) {
+              subtotal = candidate;
+              console.log(`✅ Subtotal encontrado en línea ${j}: ${subtotal}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (subtotal != null) break;
+    }
+    
+    // Detectar estructura tabular: "Base" en una línea, números en las siguientes
+    // Ejemplo: "Base\n% IVA\nlmp.IVA\n40,00\n10,00\n4,00"
+    if (lineUpper.trim() === 'BASE' && subtotal == null && i + 1 < lines.length) {
+      // Buscar en las siguientes líneas (hasta 10 líneas para estructuras tabulares complejas)
+      for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        const nextLine = lines[j];
+        const nextLineUpper = nextLine.toUpperCase();
+        
+        // Si encontramos "TOTAL" sin números antes, probablemente pasamos la sección de base
+        if (nextLineUpper.includes('TOTAL') && !nextLineUpper.match(/\d/)) {
+          break;
+        }
+        
+        const nextNumbers = extractNumbers(nextLine);
+        if (nextNumbers.length > 0) {
+          // El primer número grande (>= 10) es la base
+          const validNumbers = nextNumbers.filter(n => n >= 10);
+          if (validNumbers.length > 0) {
+            const candidate = Math.max(...validNumbers);
+            if (candidate > 0 && (total == null || candidate <= total)) {
+              subtotal = candidate;
+              console.log(`✅ Subtotal encontrado (estructura Base): ${subtotal} (línea ${j})`);
+              break;
+            }
+          }
+        }
+      }
+      if (subtotal != null) break;
+    }
+  }
+
+  // PASO 2: Buscar IVA (debe ser < subtotal y < total)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineUpper = line.toUpperCase();
+    
+    // Buscar "IMP.IVA" / "lmp.IVA" / "IMP IVA" / "IMPORTE IVA" / "I.V.A." seguido de número
+    if ((lineUpper.includes('IMP') && lineUpper.includes('IVA')) || 
+        lineUpper.includes('IMPORTE IVA') ||
+        lineUpper.includes('I.V.A.') ||
+        (lineUpper.includes('CUOTA') && !lineUpper.includes('COMENSAL'))) {
+      
+      // Buscar número en la misma línea
+      const numbers = extractNumbers(line);
+      if (numbers.length > 0) {
+        // Filtrar números pequeños que son tasas (< 1€ probablemente es tasa)
+        const validNumbers = numbers.filter(n => n >= 1);
+        if (validNumbers.length > 0) {
+          // Si hay múltiples números, el IVA suele ser el menor (o el último si hay base e IVA)
+          const candidate = validNumbers.length === 1 ? validNumbers[0] : 
+                           (validNumbers.length === 2 ? Math.min(...validNumbers) : validNumbers[validNumbers.length - 1]);
+          
+          if (candidate > 0 && 
+              (subtotal == null || candidate < subtotal) && 
+              (total == null || candidate < total) &&
+              (subtotal == null || candidate <= subtotal * 0.35)) {
+            tax = candidate;
+            console.log(`✅ IVA encontrado: ${tax} (de: ${line.substring(0, 40)})`);
+            break;
+          }
+        }
+      }
+      
+      // Buscar en línea siguiente (hasta 8 líneas siguientes para estructuras tabulares)
+      for (let j = i + 1; j < Math.min(i + 9, lines.length) && tax == null; j++) {
+        const nextLine = lines[j];
+        const nextLineUpper = nextLine.toUpperCase();
+        
+        // Si la línea siguiente contiene "TOTAL" sin números, probablemente pasamos la sección de IVA
+        if (nextLineUpper.includes('TOTAL') && !nextLine.match(/\d/)) {
+          break;
+        }
+        
+        // Si contiene "BASE" o "SUBTOTAL" sin números, probablemente es una etiqueta, continuar
+        if ((nextLineUpper.includes('BASE') || nextLineUpper.includes('SUBTOTAL')) && 
+            !nextLine.match(/\d/)) {
+          continue;
+        }
+        
+        const nextNumbers = extractNumbers(nextLine);
+        if (nextNumbers.length > 0) {
+          const validNumbers = nextNumbers.filter(n => n >= 1);
+          if (validNumbers.length > 0) {
+            // En estructuras como "84,82\n10%\n8,48", el último número es el IVA
+            // O el menor si hay múltiples números grandes
+            const candidate = validNumbers.length === 1 ? validNumbers[0] : 
+                             (validNumbers.length === 2 ? Math.min(...validNumbers) : validNumbers[validNumbers.length - 1]);
+            
+            if (candidate > 0 && 
+                (subtotal == null || candidate < subtotal) && 
+                (total == null || candidate < total) &&
+                (subtotal == null || candidate <= subtotal * 0.35)) {
+              tax = candidate;
+              console.log(`✅ IVA encontrado en línea ${j}: ${tax}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (tax != null) break;
+    }
+    
+    // Detectar estructura: "I.V.A." / "IMP.IVA" seguido de números
+    // Ejemplo: "I.V.A.\nIMP.IVA\n84,82\n10%\n8,48" donde 84,82 es base, 8,48 es IVA
+    if (lineUpper.includes('I.V.A.') || (lineUpper.includes('IMP') && lineUpper.includes('IVA'))) {
+      // Buscar en las siguientes líneas
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const nextLine = lines[j];
+        const nextNumbers = extractNumbers(nextLine);
+        if (nextNumbers.length >= 2 && subtotal == null && tax == null) {
+          // Si hay 2+ números, el primero es la base, el último es el IVA
+          const sorted = [...nextNumbers].sort((a, b) => a - b);
+          const baseCandidate = sorted[sorted.length - 1]; // El mayor
+          const taxCandidate = sorted[0]; // El menor
+          
+          if (baseCandidate > 0 && baseCandidate >= 10 && 
+              taxCandidate > 0 && taxCandidate < baseCandidate && 
+              taxCandidate <= baseCandidate * 0.35) {
+            subtotal = baseCandidate;
+            tax = taxCandidate;
+            console.log(`✅ Base e IVA encontrados en estructura I.V.A.: Base=${subtotal}, IVA=${tax}`);
+            break;
+          }
+        }
+      }
+      if (subtotal != null && tax != null) break;
+    }
+    
+    // Buscar "IVA X%" seguido de número
+    if (lineUpper.includes('IVA') && lineUpper.includes('%') && !lineUpper.includes('SIN') && tax == null) {
+      const numbers = extractNumbers(line);
+      if (numbers.length >= 2) {
+        // El último número es el IVA
+        const candidate = numbers[numbers.length - 1];
+        if (candidate > 0 && 
+            (subtotal == null || candidate < subtotal) && 
+            (total == null || candidate < total) &&
+            (subtotal == null || candidate <= subtotal * 0.35)) {
+          tax = candidate;
+          console.log(`✅ IVA encontrado: ${tax} (de: ${line.substring(0, 40)})`);
           break;
         }
       }
+    }
+    
+    // Buscar "Impuesto:" seguido de número
+    if (lineUpper.includes('IMPUESTO') && lineUpper.includes(':') && !lineUpper.includes('TOTAL') && tax == null) {
+      const numbers = extractNumbers(line);
+      if (numbers.length > 0) {
+        // Filtrar números pequeños que son tasas (< 30)
+        const validNumbers = numbers.filter(n => n >= 30);
+        if (validNumbers.length > 0) {
+          const candidate = Math.max(...validNumbers);
+          if (candidate > 0 && 
+              (subtotal == null || candidate < subtotal) && 
+              (total == null || candidate < total) &&
+              (subtotal == null || candidate <= subtotal * 0.35)) {
+            tax = candidate;
+            console.log(`✅ IVA encontrado: ${tax}`);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // PASO 3: Buscar TOTAL (debe ser > subtotal y > IVA)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineUpper = line.toUpperCase();
+    
+    // Buscar "TOTAL" (con o sin dos puntos, pero sin "SUBTOTAL", "SIN", "CON", "IVA")
+    // También buscar "TOTAL A PAGAR" / "TOTALA PAGAR" / "TOTAL A PAGAR:"
+    const isTotalLine = 
+      lineUpper.includes('TOTAL') && 
+      !lineUpper.includes('SUBTOTAL') && 
+      !lineUpper.includes('SIN') && 
+      !lineUpper.includes('CON') && 
+      !lineUpper.includes('IVA') &&
+      !line.includes('%') &&
+      (lineUpper.includes('TOTAL A PAGAR') || 
+       lineUpper.includes('TOTALA PAGAR') || 
+       lineUpper.includes('TOTAL:') || 
+       lineUpper.trim() === 'TOTAL' ||
+       (lineUpper.includes('TOTAL') && i + 1 < lines.length && !lines[i + 1].includes('%')));
+    
+    if (isTotalLine && total == null) {
+      // Buscar número en la misma línea
+      const numbers = extractNumbers(line);
+      if (numbers.length > 0) {
+        const validNumbers = numbers.filter(n => n >= 10);
+        if (validNumbers.length > 0) {
+          const candidate = Math.max(...validNumbers);
+          if (candidate > 0 && 
+              (subtotal == null || candidate >= subtotal) && 
+              (tax == null || candidate > tax)) {
+            total = candidate;
+            console.log(`✅ Total encontrado: ${total} (de: ${line.substring(0, 40)})`);
+            break;
+          }
+        }
+      }
+      
+      // Buscar en línea siguiente (hasta 5 líneas siguientes para estructuras tabulares)
+      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+        const nextLine = lines[j];
+        const nextLineUpper = nextLine.toUpperCase();
+        
+        // Si la línea siguiente contiene "%" y no tiene números grandes, probablemente es una tasa
+        if (nextLine.includes('%') && extractNumbers(nextLine).filter(n => n >= 10).length === 0) {
+          continue;
+        }
+        
+        // Si contiene "BASE" o "SUBTOTAL" sin números, probablemente es una etiqueta, continuar
+        if ((nextLineUpper.includes('BASE') || nextLineUpper.includes('SUBTOTAL')) && 
+            !nextLine.match(/\d/)) {
+          continue;
+        }
+        
+        // Si contiene "IVA" sin números, probablemente es una etiqueta, continuar
+        if (nextLineUpper.includes('IVA') && !nextLine.match(/\d/)) {
+          continue;
+        }
+        
+        const nextNumbers = extractNumbers(nextLine);
+        if (nextNumbers.length > 0) {
+          const validNumbers = nextNumbers.filter(n => n >= 10);
+          if (validNumbers.length > 0) {
+            const candidate = Math.max(...validNumbers);
+            if (candidate > 0 && 
+                (subtotal == null || candidate >= subtotal) && 
+                (tax == null || candidate > tax)) {
+              total = candidate;
+              console.log(`✅ Total encontrado en línea ${j}: ${total}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (total != null) break;
+    }
+  }
+  
+  // Si no se encontró TOTAL, buscar el último número grande al final del documento
+  if (total == null) {
+    // Buscar desde el final hacia atrás
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 10); i--) {
+      const line = lines[i];
+      const lineUpper = line.toUpperCase();
+      
+      // Ignorar líneas con palabras clave que no son totales
+      if (lineUpper.includes('IVA') || lineUpper.includes('SUBTOTAL') || 
+          lineUpper.includes('BASE') || lineUpper.includes('GRACIAS') ||
+          lineUpper.includes('VISITA') || lineUpper.includes('TARJETA')) {
+        continue;
+      }
+      
+      const numbers = extractNumbers(line);
+      if (numbers.length > 0) {
+        const validNumbers = numbers.filter(n => n >= 10);
+        if (validNumbers.length > 0) {
+          const candidate = Math.max(...validNumbers);
+          // Si es mayor que subtotal e IVA, probablemente es el total
+          if (candidate > 0 && 
+              (subtotal == null || candidate >= subtotal) && 
+              (tax == null || candidate > tax)) {
+            total = candidate;
+            console.log(`✅ Total encontrado al final del documento: ${total} (línea ${i})`);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // PASO 4: Buscar Tasa IVA (4% - 35%)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const percentMatch = line.match(/(\d+[,.]?\d*)\s*%/);
+    if (percentMatch) {
+      const rate = parseFloat(percentMatch[1].replace(',', '.'));
+      if (rate >= 4 && rate <= 35) {
+        taxRate = rate / 100.0;
+        console.log(`✅ Tasa IVA encontrada: ${rate}%`);
+        break;
+      }
+    }
+  }
+
+  // PASO 5: Calcular valores faltantes según regla: Subtotal + IVA = Total
+  if (subtotal != null && tax != null && total == null) {
+    total = subtotal + tax;
+    console.log(`✅ Total calculado: ${subtotal} + ${tax} = ${total}`);
+  } else if (subtotal != null && total != null && tax == null) {
+    tax = total - subtotal;
+    if (tax > 0 && tax < subtotal && tax <= subtotal * 0.35) {
+      console.log(`✅ IVA calculado: ${total} - ${subtotal} = ${tax}`);
+    } else {
+      tax = null;
+      console.warn(`⚠️ IVA calculado (${total - subtotal}) no válido, descartado`);
+    }
+  } else if (tax != null && total != null && subtotal == null) {
+    subtotal = total - tax;
+    if (subtotal > 0 && subtotal < total) {
+      console.log(`✅ Subtotal calculado: ${total} - ${tax} = ${subtotal}`);
+    } else {
+      subtotal = null;
+      console.warn(`⚠️ Subtotal calculado (${total - tax}) no válido, descartado`);
+    }
+  }
+
+  // PASO 6: Si tenemos tasa IVA y subtotal, calcular IVA si falta
+  if (taxRate != null && subtotal != null && tax == null) {
+    tax = subtotal * taxRate;
+    console.log(`✅ IVA calculado desde tasa: ${subtotal} × ${(taxRate * 100)}% = ${tax}`);
+    if (total == null) {
+      total = subtotal + tax;
+      console.log(`✅ Total calculado: ${subtotal} + ${tax} = ${total}`);
     }
   }
 
@@ -671,6 +852,89 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
       }
     }
 
+    // Buscar "Importe (base imponible)" seguido de número
+    if (line.includes('IMPORTE') && (line.includes('BASE') || line.includes('IMPONIBLE'))) {
+      console.log(`Detectado "Importe (base imponible)" en línea ${i}: ${lines[i]}`);
+      
+      // Buscar número en la misma línea
+      const numbersInLine = extractNumbers(lines[i]);
+      if (numbersInLine.length > 0 && subtotal == null) {
+        subtotal = Math.max(...numbersInLine);
+        console.log(`Subtotal encontrado en misma línea de "Importe (base imponible)": ${subtotal}`);
+      } else {
+        // Buscar en línea siguiente
+        for (let j = i + 1; j < Math.min(i + 2, lines.length); j++) {
+          const numbers = extractNumbers(lines[j]);
+          if (numbers.length > 0 && subtotal == null) {
+            subtotal = Math.max(...numbers);
+            console.log(`Subtotal encontrado después de "Importe (base imponible)" en línea ${j}: ${subtotal}`);
+            break;
+          }
+        }
+      }
+    }
+
+    // Buscar "Total sin IVA" seguido de número
+    if (line.includes('TOTAL') && line.includes('SIN') && line.includes('IVA')) {
+      console.log(`Detectado "Total sin IVA" en línea ${i}: ${lines[i]}`);
+      
+      // Buscar número en la misma línea
+      const numbersInLine = extractNumbers(lines[i]);
+      if (numbersInLine.length > 0 && subtotal == null) {
+        subtotal = Math.max(...numbersInLine);
+        console.log(`Subtotal encontrado en misma línea de "Total sin IVA": ${subtotal}`);
+      } else {
+        // Buscar en línea siguiente
+        for (let j = i + 1; j < Math.min(i + 2, lines.length); j++) {
+          const numbers = extractNumbers(lines[j]);
+          if (numbers.length > 0 && subtotal == null) {
+            subtotal = Math.max(...numbers);
+            console.log(`Subtotal encontrado después de "Total sin IVA" en línea ${j}: ${subtotal}`);
+            break;
+          }
+        }
+      }
+    }
+
+    // Buscar "Total IVA" seguido de número
+    if (line.includes('TOTAL') && line.includes('IVA') && !line.includes('SIN') && !line.includes('CON')) {
+      console.log(`Detectado "Total IVA" en línea ${i}: ${lines[i]}`);
+      
+      // Buscar número en la misma línea
+      const numbersInLine = extractNumbers(lines[i]);
+      if (numbersInLine.length > 0 && tax == null) {
+        const candidateTax = numbersInLine.length === 1 ? numbersInLine[0] : Math.min(...numbersInLine);
+        // Validar que sea razonable
+        if (subtotal != null) {
+          const expectedMin = subtotal * 0.04;
+          const expectedMax = subtotal * 0.35;
+          if (candidateTax >= subtotal || candidateTax < expectedMin || candidateTax > expectedMax) {
+            console.warn(`⚠️ Total IVA candidato (${candidateTax}) no válido para subtotal ${subtotal}`);
+          } else {
+            tax = candidateTax;
+            console.log(`IVA encontrado en misma línea de "Total IVA": ${tax}`);
+          }
+        } else {
+          tax = candidateTax;
+          console.log(`IVA encontrado en misma línea de "Total IVA": ${tax}`);
+        }
+      } else {
+        // Buscar en línea siguiente
+        for (let j = i + 1; j < Math.min(i + 2, lines.length); j++) {
+          const numbers = extractNumbers(lines[j]);
+          if (numbers.length > 0 && tax == null) {
+            const candidateTax = numbers.length === 1 ? numbers[0] : Math.min(...numbers);
+            // Validar que sea razonable
+            if (subtotal == null || (candidateTax < subtotal && (!subtotal || candidateTax >= subtotal * 0.04 && candidateTax <= subtotal * 0.35))) {
+              tax = candidateTax;
+              console.log(`IVA encontrado después de "Total IVA" en línea ${j}: ${tax}`);
+              break;
+            }
+          }
+        }
+      }
+    }
+
     // Buscar "Base Imponible:" seguido de número en línea siguiente
     if (line.includes('BASE') && line.includes('IMPONIBLE')) {
       console.log(`Detectado encabezado Base Imponible en línea ${i}: ${lines[i]}`);
@@ -696,7 +960,7 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
         // Validar que sea razonable
         if (subtotal != null) {
           const expectedMin = subtotal * 0.04;
-          const expectedMax = subtotal * 0.25;
+          const expectedMax = subtotal * 0.35;
           if (candidateTax >= subtotal || candidateTax < expectedMin || candidateTax > expectedMax) {
             console.warn(`⚠️ Cuota (${candidateTax}) no válida para subtotal ${subtotal}`);
           } else {
@@ -714,7 +978,7 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
           if (numbers.length > 0 && tax == null) {
             const candidateTax = numbers.length === 1 ? numbers[0] : Math.min(...numbers);
             // Validar que sea razonable
-            if (subtotal == null || (candidateTax < subtotal && (!subtotal || candidateTax >= subtotal * 0.04 && candidateTax <= subtotal * 0.25))) {
+            if (subtotal == null || (candidateTax < subtotal && (!subtotal || candidateTax >= subtotal * 0.04 && candidateTax <= subtotal * 0.35))) {
               tax = candidateTax;
               console.log(`IVA encontrado después de CUOTA en línea ${j}: ${tax}`);
               break;
@@ -730,7 +994,7 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
       const percentMatch = line.match(/(\d+)\s*%/);
       if (percentMatch && taxRate == null) {
         const rate = parseFloat(percentMatch[1]);
-        if (rate >= 4 && rate <= 25) { // Tasa IVA típicamente entre 4% y 25%
+        if (rate >= 4 && rate <= 35) {
           taxRate = rate / 100.0;
           console.log(`Tasa IVA encontrada después de I.V.A. en línea ${i}: ${rate}%`);
         }
@@ -740,7 +1004,7 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
           const percentMatch = lines[j].match(/(\d+)\s*%/);
           if (percentMatch && taxRate == null) {
             const rate = parseFloat(percentMatch[1]);
-            if (rate >= 4 && rate <= 25) {
+            if (rate >= 4 && rate <= 35) {
               taxRate = rate / 100.0;
               console.log(`Tasa IVA encontrada después de I.V.A. en línea ${j}: ${rate}%`);
               break;
@@ -764,9 +1028,9 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
           
           // Validar que sea razonable
           if (subtotal != null) {
-            // El IVA debe ser menor que el subtotal y estar en rango 4-25%
+            // El IVA debe ser menor que el subtotal y estar en rango 4-35%
             const expectedMin = subtotal * 0.04;
-            const expectedMax = subtotal * 0.25;
+            const expectedMax = subtotal * 0.35;
             if (candidateTax >= subtotal || candidateTax < expectedMin || candidateTax > expectedMax) {
               console.warn(`⚠️ IVA candidato (${candidateTax}) no válido para subtotal ${subtotal}, probando siguiente número...`);
               // Si hay múltiples números, probar el siguiente
@@ -800,7 +1064,7 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
         if (numbersInLine.length > 0) {
           const candidateTax = numbersInLine.length === 1 ? numbersInLine[0] : Math.min(...numbersInLine);
           // Validar que sea razonable
-          if (subtotal == null || (candidateTax < subtotal && (!subtotal || candidateTax >= subtotal * 0.04 && candidateTax <= subtotal * 0.25))) {
+          if (subtotal == null || (candidateTax < subtotal && (!subtotal || candidateTax >= subtotal * 0.04 && candidateTax <= subtotal * 0.35))) {
             tax = candidateTax;
             console.log(`IVA encontrado en misma línea de IMP.IVA: ${tax}`);
           }
@@ -808,47 +1072,155 @@ function extractFromMultilineFormat(lines: string[]): MonetaryValues {
       }
     }
 
-    // Buscar "TOTAL" seguido de número
-    if (line.includes('TOTAL') && !line.includes('SUBTOTAL')) {
-      console.log(`Detectado TOTAL en línea ${i}: ${lines[i]}`);
+    // Buscar "Total factura" o "Total a pagar" seguido de número (prioridad muy alta)
+    if (line.includes('TOTAL') && (line.includes('FACTURA') || (line.includes('A') && line.includes('PAGAR')))) {
+      console.log(`Detectado "Total factura/a pagar" en línea ${i}: ${lines[i]}`);
       
       // Primero buscar en la misma línea
       const numbersInLine = extractNumbers(lines[i]);
       if (numbersInLine.length > 0 && total == null) {
         total = Math.max(...numbersInLine);
-        console.log(`Total encontrado en misma línea de TOTAL: ${total}`);
+        console.log(`Total encontrado en misma línea de "Total factura/a pagar": ${total}`);
       } else {
         // Buscar en las siguientes 2 líneas
         for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
           const numbers = extractNumbers(lines[j]);
           if (numbers.length > 0 && total == null) {
             total = Math.max(...numbers);
-            console.log(`Total encontrado después de TOTAL en línea ${j}: ${total}`);
+            console.log(`Total encontrado después de "Total factura/a pagar" en línea ${j}: ${total}`);
             break;
           }
         }
       }
     }
 
-    if ((line.includes('IMPONIBLE') || line.includes('SUBTOTAL')) && !line.includes('IMPORTE') && subtotal == null) {
+    // Buscar "Impuestos" seguido de número (IVA)
+    if (line.includes('IMPUESTOS') && !line.includes('BASE')) {
+      console.log(`Detectado "Impuestos" en línea ${i}: ${lines[i]}`);
+      
+      // Buscar número en la misma línea
+      const numbersInLine = extractNumbers(lines[i]);
+      if (numbersInLine.length > 0 && tax == null) {
+        const candidateTax = numbersInLine.length === 1 ? numbersInLine[0] : Math.min(...numbersInLine);
+        // Validar que sea razonable
+        if (subtotal != null) {
+          const expectedMin = subtotal * 0.04;
+          const expectedMax = subtotal * 0.35;
+          if (candidateTax >= subtotal || candidateTax < expectedMin || candidateTax > expectedMax) {
+            console.warn(`⚠️ Impuestos candidato (${candidateTax}) no válido para subtotal ${subtotal}`);
+          } else {
+            tax = candidateTax;
+            console.log(`IVA encontrado en misma línea de "Impuestos": ${tax}`);
+          }
+        } else {
+          tax = candidateTax;
+          console.log(`IVA encontrado en misma línea de "Impuestos": ${tax}`);
+        }
+      } else {
+        // Buscar en línea siguiente
+        for (let j = i + 1; j < Math.min(i + 2, lines.length); j++) {
+          const numbers = extractNumbers(lines[j]);
+          if (numbers.length > 0 && tax == null) {
+            const candidateTax = numbers.length === 1 ? numbers[0] : Math.min(...numbers);
+            // Validar que sea razonable
+            if (subtotal == null || (candidateTax < subtotal && (!subtotal || candidateTax >= subtotal * 0.04 && candidateTax <= subtotal * 0.35))) {
+              tax = candidateTax;
+              console.log(`IVA encontrado después de "Impuestos" en línea ${j}: ${tax}`);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Buscar "Total:" seguido de número (prioridad MUY ALTA - antes de otros patrones)
+    if (line.includes('TOTAL') && line.includes(':') && !line.includes('SUBTOTAL') && !line.includes('SIN') && !line.includes('CON') && !line.includes('IVA') && !line.includes('IMPUESTO') && total == null) {
+      console.log(`Detectado "Total:" en línea ${i}: ${lines[i]}`);
+      
+      // Buscar número en la misma línea
       const numbersInLine = extractNumbers(lines[i]);
       if (numbersInLine.length > 0) {
-        subtotal = Math.max(...numbersInLine);
+        const candidateTotal = Math.max(...numbersInLine);
+        // Validar que sea razonable (mayor que 10€) y mayor que subtotal si existe
+        if (candidateTotal >= 10 && (subtotal == null || candidateTotal > subtotal)) {
+          total = candidateTotal;
+          console.log(`Total encontrado en misma línea de "Total:": ${total}`);
+        }
       } else {
-        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+        // Buscar en línea siguiente
+        for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
           const numbers = extractNumbers(lines[j]);
           if (numbers.length > 0) {
-            subtotal = Math.max(...numbers);
+            const candidateTotal = Math.max(...numbers);
+            // Validar que sea razonable y mayor que subtotal
+            if (candidateTotal >= 10 && (subtotal == null || candidateTotal > subtotal)) {
+              total = candidateTotal;
+              console.log(`Total encontrado después de "Total:" en línea ${j}: ${total}`);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Buscar "Total con IVA" seguido de número (prioridad alta)
+    if (line.includes('TOTAL') && line.includes('CON') && line.includes('IVA') && total == null) {
+      console.log(`Detectado "Total con IVA" en línea ${i}: ${lines[i]}`);
+      
+      // Primero buscar en la misma línea
+      const numbersInLine = extractNumbers(lines[i]);
+      if (numbersInLine.length > 0) {
+        total = Math.max(...numbersInLine);
+        console.log(`Total encontrado en misma línea de "Total con IVA": ${total}`);
+      } else {
+        // Buscar en las siguientes 2 líneas
+        for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+          const numbers = extractNumbers(lines[j]);
+          if (numbers.length > 0) {
+            total = Math.max(...numbers);
+            console.log(`Total encontrado después de "Total con IVA" en línea ${j}: ${total}`);
             break;
           }
         }
       }
     }
-  }
 
-  if (total == null && subtotal != null && tax != null) {
-    total = subtotal + tax;
-    console.log(`Total calculado desde subtotal + IVA: ${total}`);
+    // Buscar "TOTAL" seguido de número (genérico, menor prioridad)
+    if (line.includes('TOTAL') && !line.includes('SUBTOTAL') && !line.includes('SIN') && !line.includes('CON') && !line.includes('IVA') && !line.includes('IMPUESTO')) {
+      console.log(`Detectado TOTAL en línea ${i}: ${lines[i]}`);
+      
+      // Ignorar si está en una línea de categoría (BEBIDA, COMIDA, etc.)
+      const isCategoryLine = line.includes('BEBIDA') || line.includes('COMIDA') || line.includes('GRUPO');
+      if (isCategoryLine) {
+        console.log(`Línea ${i} es una categoría, ignorando TOTAL...`);
+        continue;
+      }
+      
+      // Primero buscar en la misma línea
+      const numbersInLine = extractNumbers(lines[i]);
+      if (numbersInLine.length > 0 && total == null) {
+        const candidateTotal = Math.max(...numbersInLine);
+        // Validar que sea razonable (mayor que 10€)
+        if (candidateTotal >= 10) {
+          total = candidateTotal;
+          console.log(`Total encontrado en misma línea de TOTAL: ${total}`);
+        }
+      } else {
+        // Buscar en las siguientes 2 líneas
+        for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+          const numbers = extractNumbers(lines[j]);
+          if (numbers.length > 0 && total == null) {
+            const candidateTotal = Math.max(...numbers);
+            // Validar que sea razonable
+            if (candidateTotal >= 10) {
+              total = candidateTotal;
+              console.log(`Total encontrado después de TOTAL en línea ${j}: ${total}`);
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
   return { total, subtotal, tax, taxRate };
@@ -899,25 +1271,9 @@ function extractFromTableFormat(lines: string[]): MonetaryValues {
       const taxNumbers = numbers.filter((n) => n > 25 || (n <= 25 && numbers.length === 1));
       if (taxNumbers.length >= 2) {
         const sorted = taxNumbers.sort((a, b) => a - b);
-        if (sorted[0] <= 25) {
-          taxRate = sorted[0] / 100.0;
-          tax = sorted[sorted.length - 1];
-        }
-      } else if (taxNumbers.length > 0) {
-        const candidate = Math.max(...taxNumbers);
-        if (candidate > 25) {
-          tax = candidate;
-        } else if (tax == null) {
-          tax = candidate;
-        }
-      }
-
-      const rateMatch = line.match(/(\d+)[,.]?\d*\s*%/);
-      if (rateMatch) {
-        const rate = parseFloat(rateMatch[1]);
-        if (rate >= 1 && rate <= 25) {
-          taxRate = rate / 100.0;
-        }
+        tax = sorted[0];
+      } else if (taxNumbers.length === 1) {
+        tax = taxNumbers[0];
       }
     }
   }
@@ -937,130 +1293,6 @@ function extractNumbers(line: string): number[] {
   }
   return numbers;
 }
-
-// ==================== VALIDACIÓN Y CÁLCULO ====================
-
-function validateAndCalculate(values: MonetaryValues): MonetaryValues {
-  let total = values.total;
-  let subtotal = values.subtotal;
-  let tax = values.tax;
-  let taxRate = values.taxRate;
-
-  if (total != null && subtotal != null && tax != null) {
-    const expectedTotal = subtotal + tax;
-    const diff = Math.abs(total - expectedTotal);
-
-    if (diff > 0.1) {
-      console.warn(`Incoherencia detectada: ${subtotal} + ${tax} = ${subtotal + tax}, pero total = ${total}`);
-
-      // Si el IVA es igual o mayor al subtotal, claramente está mal
-      if (tax >= subtotal) {
-        console.warn(`⚠️ IVA (${tax}) >= Subtotal (${subtotal}), esto es incorrecto. Recalculando IVA desde total y subtotal...`);
-        tax = total - subtotal;
-        console.log(`IVA corregido a: ${tax}`);
-        // Recalcular total
-        total = subtotal + tax;
-        console.log(`Total recalculado: ${total}`);
-      } else if (expectedTotal > total * 1.5) {
-        // Si la suma es mucho mayor que el total, probablemente el IVA está mal
-        console.warn(`⚠️ La suma (${expectedTotal}) es mucho mayor que el total (${total}), probablemente el IVA está mal. Recalculando...`);
-        const calculatedTax = total - subtotal;
-        if (calculatedTax < 0) {
-          console.warn(`⚠️ IVA calculado negativo (${calculatedTax}), manteniendo valores originales`);
-        } else {
-          tax = calculatedTax;
-          console.log(`IVA corregido a: ${tax}`);
-        }
-      } else if (expectedTotal < total * 0.8) {
-        // Si la suma es mucho menor, probablemente el total está mal
-        console.warn(`⚠️ La suma (${expectedTotal}) es mucho menor que el total (${total}), probablemente el total está mal. Usando suma calculada.`);
-        total = expectedTotal;
-        console.log(`Total corregido a: ${total}`);
-      } else {
-        // Diferencia pequeña, usar el total detectado y ajustar IVA si es necesario
-        if (Math.abs(total - expectedTotal) < 1) {
-          // Diferencia muy pequeña, probablemente redondeo, usar total detectado
-          tax = total - subtotal;
-          console.log(`IVA ajustado para coincidir con total: ${tax}`);
-        } else {
-          // Usar el total detectado (más confiable)
-          total = expectedTotal;
-          console.log(`Total corregido a: ${total}`);
-        }
-      }
-    }
-  }
-
-  if (total != null && subtotal != null && tax == null) {
-    tax = total - subtotal;
-    console.log(`IVA calculado: ${total} - ${subtotal} = ${tax}`);
-  } else if (total != null && tax != null && subtotal == null) {
-    subtotal = total - tax;
-    console.log(`Subtotal calculado: ${total} - ${tax} = ${subtotal}`);
-  } else if (subtotal != null && tax != null && total == null) {
-    total = subtotal + tax;
-    console.log(`Total calculado: ${subtotal} + ${tax} = ${total}`);
-  } else if (total != null && taxRate != null && subtotal == null && tax == null) {
-    subtotal = total / (1 + taxRate);
-    tax = total - subtotal;
-    console.log(`Valores calculados desde total y tasa: Subtotal=${subtotal}, IVA=${tax}`);
-  }
-
-  // VALIDACIÓN CRÍTICA: Si hay tasa IVA y subtotal, pero IVA es 0 y total = subtotal, recalcular
-  if (taxRate != null && subtotal != null && subtotal > 0) {
-    if (tax == null || tax === 0) {
-      if (total != null && Math.abs(total - subtotal) < 0.01) {
-        // Total es igual al subtotal, pero hay tasa IVA -> el total detectado está mal
-        console.warn(`⚠️ Inconsistencia: Tasa IVA ${(taxRate * 100)}% pero IVA=0 y Total=Subtotal. Recalculando...`);
-        tax = subtotal * taxRate;
-        total = subtotal + tax;
-        console.log(`Valores recalculados: IVA=${tax.toFixed(2)}, Total=${total.toFixed(2)}`);
-      } else if (tax == null) {
-        // No hay IVA pero hay tasa -> calcularlo
-        tax = subtotal * taxRate;
-        console.log(`IVA calculado desde subtotal y tasa: ${tax}`);
-        if (total == null) {
-          total = subtotal + tax;
-          console.log(`Total calculado: ${total}`);
-        }
-      }
-    } else {
-      // Validar que el IVA coincida con la tasa
-      const expectedTax = subtotal * taxRate;
-      const diff = Math.abs(tax - expectedTax);
-      if (diff > 0.5) { // Diferencia mayor a 0.50€
-        console.warn(`⚠️ IVA (${tax}) no coincide con tasa ${(taxRate * 100)}% del subtotal (esperado: ${expectedTax.toFixed(2)}). Ajustando...`);
-        tax = expectedTax;
-        if (total != null) {
-          total = subtotal + tax;
-          console.log(`Valores ajustados: IVA=${tax.toFixed(2)}, Total=${total.toFixed(2)}`);
-        }
-      }
-    }
-  }
-
-  if (taxRate == null && subtotal != null && tax != null && subtotal > 0) {
-    taxRate = tax / subtotal;
-    console.log(`Tasa IVA calculada: ${tax} / ${subtotal} = ${(taxRate * 100).toFixed(2)}%`);
-  }
-
-  if (total != null && subtotal != null && tax != null) {
-    if (tax > subtotal) {
-      console.warn(`Corrigiendo: IVA (${tax}) > Subtotal (${subtotal}), intercambiando`);
-      const temp = tax;
-      tax = subtotal;
-      subtotal = temp;
-    }
-    if (subtotal > total) {
-      console.warn(`Corrigiendo: Subtotal (${subtotal}) > Total (${total})`);
-      total = subtotal + tax;
-    }
-  }
-
-  return { total, subtotal, tax, taxRate };
-}
-
-// ==================== UTILIDADES ====================
 
 function parseSpanishNumber(str: string): number | null {
   if (!str || str.trim().length === 0) return null;
@@ -1096,6 +1328,126 @@ function parseSpanishNumber(str: string): number | null {
     return null;
   }
 }
+
+// Funciones duplicadas eliminadas - usar las versiones en líneas 609, 1016, 1071, 1084
+
+// ==================== VALIDACIÓN Y CÁLCULO ====================
+
+function validateAndCalculate(values: MonetaryValues): MonetaryValues {
+  let total = values.total;
+  let subtotal = values.subtotal;
+  let tax = values.tax;
+  let taxRate = values.taxRate;
+
+  if (total != null && subtotal != null && tax != null) {
+    const expectedTotal = subtotal + tax;
+    const diff = Math.abs(total - expectedTotal);
+
+    if (diff > 0.1) {
+      console.warn(`Incoherencia detectada: ${subtotal} + ${tax} = ${subtotal + tax}, pero total = ${total}`);
+
+      // Si el IVA es igual o mayor al subtotal, claramente está mal
+      // PERO: No intercambiar valores, solo recalcular el IVA desde total y subtotal
+      if (tax >= subtotal) {
+        console.warn(`⚠️ IVA (${tax}) >= Subtotal (${subtotal}), esto es incorrecto. Recalculando IVA desde total y subtotal...`);
+        const calculatedTax = total - subtotal;
+        if (calculatedTax >= 0 && calculatedTax < subtotal) {
+          tax = calculatedTax;
+          console.log(`IVA corregido a: ${tax}`);
+        } else {
+          console.warn(`⚠️ IVA calculado (${calculatedTax}) no válido, manteniendo valores originales pero marcando como incorrecto`);
+        }
+      } else if (expectedTotal > total * 1.5) {
+        // Si la suma es mucho mayor que el total, probablemente el IVA está mal
+        console.warn(`⚠️ La suma (${expectedTotal}) es mucho mayor que el total (${total}), probablemente el IVA está mal. Recalculando...`);
+        const calculatedTax = total - subtotal;
+        if (calculatedTax < 0) {
+          console.warn(`⚠️ IVA calculado negativo (${calculatedTax}), manteniendo valores originales`);
+        } else {
+          tax = calculatedTax;
+          console.log(`IVA corregido a: ${tax}`);
+        }
+      } else if (expectedTotal < total * 0.5) {
+        // Si la suma es mucho menor que el total, probablemente el subtotal está mal
+        console.warn(`⚠️ La suma (${expectedTotal}) es mucho menor que el total (${total}), probablemente el subtotal está mal. Recalculando...`);
+        const calculatedSubtotal = total - tax;
+        if (calculatedSubtotal < 0) {
+          console.warn(`⚠️ Subtotal calculado negativo (${calculatedSubtotal}), manteniendo valores originales`);
+        } else {
+          subtotal = calculatedSubtotal;
+          console.log(`Subtotal corregido a: ${subtotal}`);
+        }
+      } else {
+        // Si la diferencia es pequeña pero existe, ajustar el total
+        total = expectedTotal;
+        console.log(`Total corregido a: ${total}`);
+      }
+    }
+  }
+
+  if (total != null && subtotal != null && tax == null) {
+    const calculatedTax = total - subtotal;
+    if (calculatedTax >= 0) {
+      tax = calculatedTax;
+      console.log(`IVA calculado: ${total} - ${subtotal} = ${tax}`);
+    } else {
+      console.warn(`⚠️ IVA calculado negativo (${calculatedTax}), probablemente el total o subtotal están incorrectos. No asignando IVA.`);
+    }
+  } else if (total != null && tax != null && subtotal == null) {
+    const calculatedSubtotal = total - tax;
+    if (calculatedSubtotal >= 0) {
+      subtotal = calculatedSubtotal;
+      console.log(`Subtotal calculado: ${total} - ${tax} = ${subtotal}`);
+    } else {
+      console.warn(`⚠️ Subtotal calculado negativo (${calculatedSubtotal}), probablemente el total o IVA están incorrectos. No asignando subtotal.`);
+    }
+  } else if (subtotal != null && tax != null && total == null) {
+    const calculatedTotal = subtotal + tax;
+    if (calculatedTotal >= 0) {
+      total = calculatedTotal;
+      console.log(`Total calculado: ${subtotal} + ${tax} = ${total}`);
+    } else {
+      console.warn(`⚠️ Total calculado negativo (${calculatedTotal}), probablemente el subtotal o IVA están incorrectos. No asignando total.`);
+    }
+  } else if (total != null && taxRate != null && subtotal == null && tax == null) {
+    const calculatedSubtotal = total / (1 + taxRate);
+    const calculatedTax = total - calculatedSubtotal;
+    if (calculatedSubtotal >= 0 && calculatedTax >= 0) {
+      subtotal = calculatedSubtotal;
+      tax = calculatedTax;
+      console.log(`Subtotal y IVA calculados desde total y tasa: subtotal=${subtotal}, IVA=${tax}`);
+    }
+  }
+
+  // Validar coherencia entre valores
+  if (total != null && subtotal != null && tax != null) {
+    if (tax > subtotal) {
+      console.warn(`⚠️ IVA (${tax}) > Subtotal (${subtotal}), esto es incorrecto. Recalculando desde total...`);
+      // NO intercambiar valores, solo recalcular el IVA desde total y subtotal
+      const calculatedTax = total - subtotal;
+      if (calculatedTax >= 0 && calculatedTax < subtotal) {
+        tax = calculatedTax;
+        console.log(`IVA recalculado desde total: ${tax}`);
+      } else {
+        console.warn(`⚠️ IVA recalculado (${calculatedTax}) no válido, manteniendo valores originales`);
+      }
+    }
+    if (subtotal > total) {
+      console.warn(`⚠️ Subtotal (${subtotal}) > Total (${total}), esto es incorrecto. Recalculando total...`);
+      const calculatedTotal = subtotal + tax;
+      if (calculatedTotal > 0) {
+        total = calculatedTotal;
+        console.log(`Total recalculado: ${total}`);
+      }
+    }
+  }
+
+  return { total, subtotal, tax, taxRate };
+}
+
+// Funciones duplicadas eliminadas - usar las versiones en líneas 609, 1016, 1071, 1084
+
+// ==================== UTILIDADES ====================
 
 function calculateConfidence(
   establishment: string | null,

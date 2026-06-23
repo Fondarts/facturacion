@@ -75,3 +75,4 @@ Procesa una imagen y devuelve datos estructurados de la factura.
 - El servicio está optimizado para facturas en español
 
 
+

@@ -1,3 +1,6 @@
+// Carga variables de .env si dotenv está instalado (opcional: no rompe si falta)
+try { require('dotenv').config(); } catch (e) { /* dotenv opcional */ }
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -6,12 +9,34 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('./database');
 const axios = require('axios');
 const FormData = require('form-data');
+const { extractWithGemini } = require('./geminiOcr');
+const { reconcile, computeConfidence } = require('./reconcile');
 
 const app = express();
 const PORT = 3001;
 
+// Proveedor de OCR: 'gemini' (por defecto) o 'paddleocr'
+const OCR_PROVIDER = (process.env.OCR_PROVIDER || 'gemini').toLowerCase();
+
+// CORS configurable: ALLOWED_ORIGINS separados por coma. Por defecto solo
+// orígenes de desarrollo local. Agregá tu dominio (p.ej. de Vercel) al desplegar.
+const ALLOWED_ORIGINS = (
+  process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:4173,http://localhost:3000'
+)
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Permitir herramientas/clientes sin Origin (curl, app móvil) y la lista blanca
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error(`Origen no permitido por CORS: ${origin}`));
+    },
+  })
+);
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
@@ -269,6 +294,37 @@ app.post('/api/ocr/process', upload.single('image'), async (req, res) => {
     const mimeType = req.file.mimetype || 'image/jpeg';
     const dataUri = `data:${mimeType};base64,${base64Image}`;
 
+    // ===== Proveedor Gemini (por defecto): imagen/PDF -> JSON estructurado =====
+    if (OCR_PROVIDER === 'gemini') {
+      try {
+        const raw = await extractWithGemini(base64Image, mimeType);
+        const rec = reconcile(raw);
+        const data = {
+          establishment: raw.establishment || null,
+          date: raw.date || null,
+          total: rec.total,
+          subtotal: rec.subtotal,
+          tax: rec.tax,
+          taxRate: rec.taxRate,
+          rawText: raw.rawText || '',
+          consistent: rec.consistent,
+          confidence: computeConfidence({ ...raw, ...rec }, rec.consistent),
+        };
+        fs.unlinkSync(req.file.path);
+        console.log(
+          `✅ Gemini OCR ok — total=${data.total} coherente=${data.consistent} conf=${data.confidence}`
+        );
+        return res.json({ success: true, data });
+      } catch (gErr) {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        const gMsg = (gErr.response && gErr.response.data && gErr.response.data.error && gErr.response.data.error.message) || gErr.message;
+        console.error('❌ Error en Gemini OCR:', gMsg);
+        const status = gErr.statusCode === 503 ? 503 : 500;
+        return res.status(status).json({ error: 'Error procesando OCR con Gemini', message: gMsg });
+      }
+    }
+
+    // ===== Proveedor PaddleOCR (servicio Python) =====
     console.log(`📤 Enviando a servicio Python: ${OCR_SERVICE_URL}/ocr/process`);
     console.log(`📤 Tamaño base64: ${dataUri.length} caracteres`);
 

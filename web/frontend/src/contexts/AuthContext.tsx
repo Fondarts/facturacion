@@ -1,131 +1,75 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { initAuth, requestToken, getUserInfo, revokeToken } from '../services/googleAuth';
 
 export interface User {
   id: string;
   username: string;
   email: string;
+  picture?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  /** Inicia sesión con Google (abre el popup de consentimiento). */
+  login: () => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 const STORAGE_KEY = 'facturacion_user';
-const USERS_STORAGE_KEY = 'facturacion_users';
-
-// Usuario por defecto para desarrollo
-const DEFAULT_USER = {
-  id: '1',
-  username: 'admin',
-  password: 'admin123', // En producción esto debería estar hasheado
-  email: 'admin@facturacion.com'
-};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Función helper para verificar si localStorage está disponible
-  const isLocalStorageAvailable = (): boolean => {
+  const persist = (u: User | null) => {
+    setUser(u);
     try {
-      return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+      if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+      else localStorage.removeItem(STORAGE_KEY);
     } catch {
-      return false;
+      /* ignore */
     }
   };
 
-  // Inicializar usuarios en localStorage si no existen
+  // Al arrancar solo inicializamos Google (cargar script + token client).
+  // NO pedimos token acá: requestAccessToken abre un popup y, sin un click del
+  // usuario, el navegador lo bloquea. El login ocurre al tocar el botón.
   useEffect(() => {
-    if (!isLocalStorageAvailable()) {
-      setIsLoading(false);
-      return;
-    }
-
-    const existingUsers = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!existingUsers) {
-      // Crear usuario por defecto
-      const users = [DEFAULT_USER];
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-    }
+    let cancelled = false;
+    initAuth()
+      .catch((e) => console.warn('No se pudo inicializar Google Auth:', e))
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Cargar usuario desde localStorage al iniciar
-  useEffect(() => {
-    if (!isLocalStorageAvailable()) {
-      setIsLoading(false);
-      return;
-    }
-
-    const storedUser = localStorage.getItem(STORAGE_KEY);
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-      } catch (error) {
-        console.error('Error loading user from localStorage:', error);
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = async (username: string, password: string): Promise<boolean> => {
-    if (!isLocalStorageAvailable()) {
-      return false;
-    }
-
+  const login = async (): Promise<boolean> => {
     try {
-      // Obtener usuarios del localStorage
-      const usersStr = localStorage.getItem(USERS_STORAGE_KEY);
-      if (!usersStr) {
-        return false;
-      }
-
-      const users = JSON.parse(usersStr);
-      const foundUser = users.find(
-        (u: any) => u.username === username && u.password === password
-      );
-
-      if (foundUser) {
-        const userData: User = {
-          id: foundUser.id,
-          username: foundUser.username,
-          email: foundUser.email,
-        };
-        setUser(userData);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
-        return true;
-      }
-
-      return false;
+      await initAuth(); // garantiza que el token client exista (normalmente ya lo está)
+      await requestToken(true); // abre el popup de Google (dentro del click)
+      const info = await getUserInfo();
+      persist({ id: info.sub, username: info.name || info.email, email: info.email, picture: info.picture });
+      return true;
     } catch (error) {
-      console.error('Error during login:', error);
+      console.error('Error en login con Google:', error);
       return false;
     }
   };
 
   const logout = () => {
-    setUser(null);
-    if (isLocalStorageAvailable()) {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    revokeToken();
+    persist(null);
   };
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        login,
-        logout,
-        isAuthenticated: !!user,
-        isLoading,
-      }}
+      value={{ user, login, logout, isAuthenticated: !!user, isLoading }}
     >
       {children}
     </AuthContext.Provider>

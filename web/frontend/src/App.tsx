@@ -47,7 +47,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             
             <nav className="flex items-center gap-2">
               <NavLink to="/" icon={Home}>Inicio</NavLink>
-              <NavLink to="/facturas" icon={FileText}>Facturas</NavLink>
+              <NavLink to="/facturas" icon={FileText}>Gastos</NavLink>
               <NavLink to="/stats" icon={BarChart3}>Estadísticas</NavLink>
               <Link
                 to="/facturar"

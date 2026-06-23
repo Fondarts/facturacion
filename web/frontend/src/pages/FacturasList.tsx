@@ -330,8 +330,8 @@ export default function FacturasList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Facturas</h1>
-          <p className="text-slate-400">{facturas.length} facturas registradas</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Gastos</h1>
+          <p className="text-slate-400">{facturas.length} gastos registrados</p>
         </div>
         <div className="flex gap-3">
           <Link
@@ -346,7 +346,7 @@ export default function FacturasList() {
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
           >
             <Plus size={20} />
-            Ingresar Factura
+            Ingresar Gasto
           </Link>
         </div>
       </div>
@@ -403,14 +403,14 @@ export default function FacturasList() {
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-12 border border-slate-700/50 text-center">
           <FileText className="mx-auto text-slate-600 mb-4" size={48} />
           <p className="text-slate-400 mb-4">
-            {search || filter !== 'todas' ? 'No se encontraron facturas' : 'No hay facturas todavía'}
+            {search || filter !== 'todas' ? 'No se encontraron gastos' : 'No hay gastos todavía'}
           </p>
           <Link
             to="/facturas/nueva"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
           >
             <Plus size={18} />
-            Añadir primera factura
+            Añadir primer gasto
           </Link>
         </div>
       ) : (
@@ -509,9 +509,9 @@ export default function FacturasList() {
                         </div>
                         
                         <div className="flex items-center gap-2">
-                          {factura.fileUrl && (
+                          {(factura.fileUrl || factura.driveFileId) && (
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} />
+                              <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} driveFileId={factura.driveFileId} />
                             </div>
                           )}
                           {factura.tipo === 'generada' ? (

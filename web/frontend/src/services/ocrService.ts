@@ -25,7 +25,7 @@ export interface ExtractedInvoiceData {
 // 'ocrspace' = OCR.space API (25,000 requests gratis/mes)
 // 'tesseract' = Tesseract.js (gratis pero menos preciso)
 // 'paddleocr' = PaddleOCR local (requiere servicio Python)
-const OCR_SERVICE = (import.meta.env.VITE_OCR_SERVICE || 'google') as 'paddleocr' | 'google' | 'ocrspace' | 'tesseract';
+const OCR_SERVICE = (import.meta.env.VITE_OCR_SERVICE || 'gemini') as 'gemini' | 'paddleocr' | 'google' | 'ocrspace' | 'tesseract';
 // Usar proxy de Vite en desarrollo, o URL completa en producción
 const BACKEND_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001');
 const GOOGLE_VISION_API_KEY = import.meta.env.VITE_GOOGLE_VISION_API_KEY || '';
@@ -316,13 +316,12 @@ async function extractTextWithTesseract(imageFile: File, onProgress?: (progress:
 }
 
 /**
- * Extrae datos estructurados usando PaddleOCR (recomendado)
+ * Extrae datos estructurados a través del backend (Gemini o PaddleOCR).
+ * El backend decide el proveedor según OCR_PROVIDER y devuelve el JSON ya parseado.
  */
-async function extractWithPaddleOCR(imageFile: File, onProgress?: (progress: number) => void): Promise<ExtractedInvoiceData> {
-  console.log('🚀 extractWithPaddleOCR iniciado');
-  console.log('📁 Archivo:', imageFile.name, imageFile.type, imageFile.size, 'bytes');
-  console.log('🔗 BACKEND_URL:', BACKEND_URL || '(vacío - usando proxy)');
-  
+async function extractViaBackend(imageFile: File, onProgress?: (progress: number) => void): Promise<ExtractedInvoiceData> {
+  console.log(`[OCR] Enviando "${imageFile.name}" al backend (${(imageFile.size / 1024).toFixed(0)} KB)…`);
+
   if (onProgress) onProgress(20);
 
   const formData = new FormData();
@@ -330,46 +329,37 @@ async function extractWithPaddleOCR(imageFile: File, onProgress?: (progress: num
 
   if (onProgress) onProgress(40);
 
-  // Usar proxy de Vite en desarrollo (URL vacía = usar proxy)
-  const url = `${BACKEND_URL}/api/ocr/process`;
-  console.log('📤 URL completa:', url);
-  console.log('📤 Método: POST');
-  console.log('📤 FormData con imagen:', imageFile.name, imageFile.size, 'bytes');
+  const url = `${BACKEND_URL}/api/ocr/process`; // URL vacía en dev = proxy de Vite
 
   try {
-    console.log('📤 Iniciando fetch...');
-    // Crear un AbortController para timeout manual si fetch no lo soporta
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutos
-    
+
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
-      // NO incluir Content-Type, el navegador lo agregará automáticamente con el boundary
+      // Sin Content-Type: el navegador lo agrega con el boundary correcto
     });
-    
-    clearTimeout(timeoutId);
 
-    console.log('📥 Respuesta recibida:', response.status, response.statusText);
-    console.log('📥 Headers:', Object.fromEntries(response.headers.entries()));
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Error en respuesta:', response.status, errorText);
       let errorData;
       try {
         errorData = JSON.parse(errorText);
       } catch {
         errorData = { error: errorText || 'Error desconocido' };
       }
-      throw new Error(errorData.error || `Error del servidor: ${response.status}`);
+      // El backend manda un "message" descriptivo (p.ej. cuota/saturación de Gemini)
+      const msg = errorData.message || errorData.error || `Error del servidor: ${response.status}`;
+      throw new Error(msg);
     }
 
     if (onProgress) onProgress(80);
 
     const result = await response.json();
-    console.log('✅ Resultado recibido:', result);
 
     if (!result.success || !result.data) {
       throw new Error('Respuesta inválida del servicio OCR');
@@ -405,10 +395,13 @@ async function extractWithPaddleOCR(imageFile: File, onProgress?: (progress: num
       tables: data.tables,
     };
 
-    console.log('✅ PaddleOCR extrajo datos:', extractedData);
+    console.log('[OCR] Datos extraídos:', {
+      establecimiento: extractedData.establishment,
+      total: extractedData.total,
+      confianza: extractedData.confidence,
+    });
     return extractedData;
   } catch (error) {
-    console.error('Error en PaddleOCR:', error);
     throw error;
   }
 }
@@ -430,9 +423,10 @@ export async function extractTextFromImage(imageFile: File, onProgress?: (progre
   try {
     switch (OCR_SERVICE) {
       case 'paddleocr':
-        // PaddleOCR devuelve datos estructurados, pero mantenemos compatibilidad
-        // con la interfaz que espera solo texto
-        const data = await extractWithPaddleOCR(fileToProcess, onProgress);
+      case 'gemini':
+        // El backend (Gemini/PaddleOCR) devuelve datos estructurados; aquí solo
+        // se usa el texto para mantener compatibilidad con la interfaz de texto.
+        const data = await extractViaBackend(fileToProcess, onProgress);
         return data.rawText;
       case 'google':
         return await extractTextWithGoogleVision(fileToProcess, onProgress);
@@ -459,27 +453,19 @@ export async function extractTextFromImage(imageFile: File, onProgress?: (progre
  * Soporta imágenes y PDFs
  */
 export async function extractInvoiceData(imageFile: File, onProgress?: (progress: number) => void): Promise<ExtractedInvoiceData> {
-  console.log('🔍 extractInvoiceData - OCR_SERVICE:', OCR_SERVICE);
-  console.log(`📁 Archivo: ${imageFile.name}, tipo: ${imageFile.type}`);
-  
   try {
-    if (OCR_SERVICE === 'paddleocr') {
-      console.log('✅ Usando PaddleOCR');
-      // Si es PDF, convertir a imagen primero
+    if (OCR_SERVICE === 'gemini' || OCR_SERVICE === 'paddleocr') {
       let fileToProcess = imageFile;
-      if (imageFile.type === 'application/pdf') {
-        console.log('📄 Archivo es PDF, convirtiendo a imagen para PaddleOCR...');
+      // PaddleOCR no procesa PDFs: hay que convertirlos a imagen (solo 1ª página).
+      // Gemini acepta el PDF directamente, incluido multipágina.
+      if (imageFile.type === 'application/pdf' && OCR_SERVICE === 'paddleocr') {
+        console.log('📄 PDF -> imagen para PaddleOCR...');
         if (onProgress) onProgress(10);
         fileToProcess = await pdfToImage(imageFile);
         if (onProgress) onProgress(20);
       }
-      try {
-        return await extractWithPaddleOCR(fileToProcess, onProgress);
-      } catch (paddleError) {
-        console.error('❌ Error con PaddleOCR:', paddleError);
-        console.error('❌ No se hará fallback automático - revisa la conexión');
-        throw paddleError; // No hacer fallback automático, que el usuario vea el error
-      }
+      // Sin fallback automático: que se vea el error real del backend
+      return await extractViaBackend(fileToProcess, onProgress);
     }
 
     // Para Google Vision, OCR.space y Tesseract: extraer texto y parsearlo
@@ -500,21 +486,9 @@ export async function extractInvoiceData(imageFile: File, onProgress?: (progress
       };
     }
     
-    console.log(`📄 Texto extraído: ${rawText.length} caracteres`);
-    
     let parsed;
     try {
-      console.log('🔍 Iniciando parseo del texto...');
       parsed = parseInvoiceText(rawText);
-      console.log('✅ Parseo completado:', {
-        establishment: parsed.establishment,
-        date: parsed.date,
-        total: parsed.total,
-        subtotal: parsed.subtotal,
-        tax: parsed.tax,
-        taxRate: parsed.taxRate,
-        confidence: parsed.confidence,
-      });
     } catch (parseError) {
       console.error('❌ Error en parseInvoiceText:', parseError);
       throw new Error(`Error parseando el texto extraído: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
@@ -531,11 +505,10 @@ export async function extractInvoiceData(imageFile: File, onProgress?: (progress
       confidence: parsed.confidence,
     };
     
-    console.log('✅ Retornando resultado de extractInvoiceData:', result);
     return result;
   } catch (error) {
-    console.error('❌ Error extrayendo datos de factura:', error);
-    
+    console.error('[OCR] Error:', error instanceof Error ? error.message : error);
+
     // Si es un error de API key faltante, dar mensaje más claro
     if (error instanceof Error && error.message.includes('API key')) {
       throw new Error(`API key no configurada. Crea un archivo .env en web/frontend/ con VITE_GOOGLE_VISION_API_KEY=tu_api_key`);

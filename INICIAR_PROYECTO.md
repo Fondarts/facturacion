@@ -46,3 +46,4 @@ VITE_GOOGLE_VISION_API_KEY=tu_api_key_aqui
 - Si cambias algo en el código, los servicios se recargan automáticamente
 - Para detener los servicios: `Ctrl + C` en cada terminal
 
+

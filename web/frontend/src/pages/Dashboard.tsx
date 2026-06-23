@@ -52,7 +52,7 @@ export default function Dashboard() {
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
         >
           <Plus size={20} />
-          Ingresar Factura
+          Ingresar Gasto
         </Link>
       </div>
 
@@ -64,7 +64,7 @@ export default function Dashboard() {
               <FileText className="text-emerald-400" size={24} />
             </div>
             <div>
-              <p className="text-slate-400 text-sm">Total Facturas</p>
+              <p className="text-slate-400 text-sm">Total Gastos</p>
               <p className="text-2xl font-bold text-white">{stats?.totalFacturas || 0}</p>
             </div>
           </div>
@@ -98,7 +98,7 @@ export default function Dashboard() {
       {/* Recent invoices */}
       <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Facturas Recientes</h2>
+          <h2 className="text-lg font-semibold text-white">Gastos Recientes</h2>
           <Link to="/facturas" className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 text-sm">
             Ver todas <ArrowRight size={16} />
           </Link>
@@ -107,13 +107,13 @@ export default function Dashboard() {
         {recentFacturas.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <FileText className="mx-auto text-slate-600 mb-4" size={48} />
-            <p className="text-slate-400 mb-4">No hay facturas todavía</p>
+            <p className="text-slate-400 mb-4">No hay gastos todavía</p>
             <Link
               to="/facturas/nueva"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
             >
               <Plus size={18} />
-              Añadir primera factura
+              Añadir primer gasto
             </Link>
           </div>
         ) : (

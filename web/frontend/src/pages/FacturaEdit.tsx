@@ -878,12 +878,12 @@ export default function FacturaEdit() {
           </div>
 
           {/* Archivo */}
-          {factura.fileUrl && (
+          {(factura.fileUrl || factura.driveFileId) && (
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Archivo de Factura
               </label>
-              <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} />
+              <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} driveFileId={factura.driveFileId} />
             </div>
           )}
 

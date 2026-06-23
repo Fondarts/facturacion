@@ -22,3 +22,4 @@ if isinstance(result, list):
             print(f"Keys del primer elemento: {list(result[0].keys())}")
 
 
+

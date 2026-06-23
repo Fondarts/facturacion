@@ -192,8 +192,8 @@ export default function FacturaNew() {
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">Ingresar Factura</h1>
-          <p className="text-slate-400">Registrar una factura recibida</p>
+          <h1 className="text-2xl font-bold text-white">Ingresar Gasto</h1>
+          <p className="text-slate-400">Registrar un gasto</p>
         </div>
       </div>
 
@@ -477,7 +477,7 @@ export default function FacturaNew() {
             ) : (
               <>
                 <Save size={20} />
-                Crear Factura
+                Ingresar Gasto
               </>
             )}
           </button>
