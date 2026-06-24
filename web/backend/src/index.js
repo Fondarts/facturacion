@@ -37,7 +37,7 @@ app.use(
     },
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '15mb' })); // imágenes en base64 pueden ser grandes
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Configurar multer para subida de archivos
@@ -275,29 +275,25 @@ app.get('/api/sync', (req, res) => {
 const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL || 'http://localhost:5000';
 
 // Procesar imagen con PaddleOCR
-app.post('/api/ocr/process', upload.single('image'), async (req, res) => {
+// Recibe JSON { image: dataURI base64, model? } — mismo formato que la función serverless de Vercel.
+app.post('/api/ocr/process', async (req, res) => {
   console.log('🔔 RECIBIDA PETICIÓN OCR en backend Node.js');
-  console.log(`📥 Archivo recibido: ${req.file ? req.file.originalname : 'NINGUNO'}`);
-  
   try {
-    if (!req.file) {
-      console.log('❌ No se recibió archivo');
-      return res.status(400).json({ error: 'Se requiere una imagen' });
+    const dataUri = req.body && req.body.image;
+    if (!dataUri) {
+      return res.status(400).json({ error: 'Se requiere una imagen (campo "image" en base64)' });
     }
+    const modelOverride = (req.body && req.body.model) || undefined;
 
-    console.log(`📷 Procesando archivo: ${req.file.filename}, tamaño: ${req.file.size} bytes`);
+    // dataURI -> mimeType + base64
+    const match = /^data:([^;]+);base64,(.*)$/s.exec(dataUri);
+    const mimeType = match ? match[1] : 'image/jpeg';
+    const base64Image = match ? match[2] : dataUri;
+    console.log(`📷 OCR ${mimeType}, ${(base64Image.length / 1024).toFixed(0)} KB base64`);
 
-    // Convertir archivo a base64
-    const fs = require('fs');
-    const imageBuffer = fs.readFileSync(req.file.path);
-    const base64Image = imageBuffer.toString('base64');
-    const mimeType = req.file.mimetype || 'image/jpeg';
-    const dataUri = `data:${mimeType};base64,${base64Image}`;
-
-    // ===== Proveedor Gemini (por defecto): imagen/PDF -> JSON estructurado =====
+    // ===== Proveedor Gemini (por defecto) =====
     if (OCR_PROVIDER === 'gemini') {
       try {
-        const modelOverride = (req.body && req.body.model) || undefined;
         const raw = await extractWithGemini(base64Image, mimeType, modelOverride);
         const rec = reconcile(raw);
         const data = {
@@ -311,13 +307,9 @@ app.post('/api/ocr/process', upload.single('image'), async (req, res) => {
           consistent: rec.consistent,
           confidence: computeConfidence({ ...raw, ...rec }, rec.consistent),
         };
-        fs.unlinkSync(req.file.path);
-        console.log(
-          `✅ Gemini OCR ok — total=${data.total} coherente=${data.consistent} conf=${data.confidence}`
-        );
+        console.log(`✅ Gemini OCR ok — total=${data.total} coherente=${data.consistent} conf=${data.confidence}`);
         return res.json({ success: true, data });
       } catch (gErr) {
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         const gMsg = (gErr.response && gErr.response.data && gErr.response.data.error && gErr.response.data.error.message) || gErr.message;
         console.error('❌ Error en Gemini OCR:', gMsg);
         const status = gErr.statusCode === 503 ? 503 : 500;
@@ -327,51 +319,21 @@ app.post('/api/ocr/process', upload.single('image'), async (req, res) => {
 
     // ===== Proveedor PaddleOCR (servicio Python) =====
     console.log(`📤 Enviando a servicio Python: ${OCR_SERVICE_URL}/ocr/process`);
-    console.log(`📤 Tamaño base64: ${dataUri.length} caracteres`);
-
-    // Llamar al servicio Python de PaddleOCR
     try {
-      const response = await axios.post(`${OCR_SERVICE_URL}/ocr/process`, {
-        image: dataUri
-      }, {
-        timeout: 120000, // 120 segundos timeout (2 minutos) - OCR puede tardar con imágenes grandes
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const response = await axios.post(`${OCR_SERVICE_URL}/ocr/process`, { image: dataUri }, {
+        timeout: 120000,
+        headers: { 'Content-Type': 'application/json' },
       });
-
-      console.log(`✅ Respuesta recibida del servicio Python: ${response.status}`);
-
-      // Limpiar archivo temporal
-      fs.unlinkSync(req.file.path);
-
-      if (response.data.success) {
-        console.log('✅ OCR procesado exitosamente');
-        res.json(response.data);
-      } else {
-        console.log('❌ OCR falló:', response.data);
-        res.status(500).json({ error: 'Error procesando OCR' });
-      }
+      if (response.data.success) return res.json(response.data);
+      return res.status(500).json({ error: 'Error procesando OCR' });
     } catch (ocrError) {
-      // Limpiar archivo temporal en caso de error
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-
       console.error('❌ Error llamando al servicio OCR:', ocrError.message);
-      console.error('❌ Código de error:', ocrError.code);
-      if (ocrError.response) {
-        console.error('❌ Respuesta del servidor:', ocrError.response.status, ocrError.response.data);
-      }
-      
-      // Si el servicio OCR no está disponible, devolver error descriptivo
       if (ocrError.code === 'ECONNREFUSED' || ocrError.code === 'ETIMEDOUT') {
         return res.status(503).json({
           error: 'Servicio OCR no disponible',
-          message: 'El servicio PaddleOCR no está ejecutándose. Inicia el servicio con: cd web/backend/ocr_service && python app.py'
+          message: 'El servicio PaddleOCR no está ejecutándose. Inicia el servicio con: cd web/backend/ocr_service && python app.py',
         });
       }
-      
       throw ocrError;
     }
   } catch (error) {

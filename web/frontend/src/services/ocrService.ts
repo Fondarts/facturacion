@@ -28,7 +28,9 @@ export interface ExtractedInvoiceData {
 // 'paddleocr' = PaddleOCR local (requiere servicio Python)
 const OCR_SERVICE = (import.meta.env.VITE_OCR_SERVICE || 'gemini') as 'gemini' | 'paddleocr' | 'google' | 'ocrspace' | 'tesseract';
 // Usar proxy de Vite en desarrollo, o URL completa en producción
-const BACKEND_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001');
+// Vacío = mismo origen: en dev lo toma el proxy de Vite (-> localhost:3001),
+// en producción lo toma la función serverless de Vercel (/api/ocr/process).
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || '';
 const GOOGLE_VISION_API_KEY = import.meta.env.VITE_GOOGLE_VISION_API_KEY || '';
 const OCR_SPACE_API_KEY = import.meta.env.VITE_OCR_SPACE_API_KEY || '';
 
@@ -316,24 +318,52 @@ async function extractTextWithTesseract(imageFile: File, onProgress?: (progress:
   }
 }
 
+/** Reduce imágenes a máx 1536px y las recodifica a JPEG; PDFs y otros van crudos. Devuelve dataURI. */
+async function fileToDataUri(file: File): Promise<string> {
+  const isResizable = file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/webp';
+  if (!isResizable) return readAsDataUri(file); // PDF u otro: tal cual
+  try {
+    const bitmap = await createImageBitmap(file);
+    const max = 1536;
+    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return readAsDataUri(file);
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } catch {
+    return readAsDataUri(file);
+  }
+}
+
+function readAsDataUri(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 /**
  * Extrae datos estructurados a través del backend (Gemini o PaddleOCR).
- * El backend decide el proveedor según OCR_PROVIDER y devuelve el JSON ya parseado.
+ * Manda la imagen como base64 JSON (mismo formato en dev/Express y en la serverless de Vercel).
  */
 async function extractViaBackend(imageFile: File, onProgress?: (progress: number) => void): Promise<ExtractedInvoiceData> {
   console.log(`[OCR] Enviando "${imageFile.name}" al backend (${(imageFile.size / 1024).toFixed(0)} KB)…`);
 
   if (onProgress) onProgress(20);
 
-  const formData = new FormData();
-  formData.append('image', imageFile);
-  // Modelo de Gemini elegido en Ajustes (vacío = automático en el backend)
-  const { geminiModel } = getSettings();
-  if (geminiModel) formData.append('model', geminiModel);
+  const dataUri = await fileToDataUri(imageFile);
+  const { geminiModel } = getSettings(); // modelo elegido en Ajustes (vacío = automático)
 
   if (onProgress) onProgress(40);
 
-  const url = `${BACKEND_URL}/api/ocr/process`; // URL vacía en dev = proxy de Vite
+  const url = `${BACKEND_URL}/api/ocr/process`;
 
   try {
     const controller = new AbortController();
@@ -341,9 +371,9 @@ async function extractViaBackend(imageFile: File, onProgress?: (progress: number
 
     const response = await fetch(url, {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUri, model: geminiModel || undefined }),
       signal: controller.signal,
-      // Sin Content-Type: el navegador lo agrega con el boundary correcto
     });
 
     clearTimeout(timeoutId);
