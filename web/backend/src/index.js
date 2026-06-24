@@ -297,7 +297,8 @@ app.post('/api/ocr/process', upload.single('image'), async (req, res) => {
     // ===== Proveedor Gemini (por defecto): imagen/PDF -> JSON estructurado =====
     if (OCR_PROVIDER === 'gemini') {
       try {
-        const raw = await extractWithGemini(base64Image, mimeType);
+        const modelOverride = (req.body && req.body.model) || undefined;
+        const raw = await extractWithGemini(base64Image, mimeType, modelOverride);
         const rec = reconcile(raw);
         const data = {
           establishment: raw.establishment || null,

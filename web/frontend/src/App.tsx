@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileText, Plus, BarChart3, Home, LogOut, User } from 'lucide-react';
+import { FileText, Plus, BarChart3, Home, LogOut, User, Settings as SettingsIcon } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -9,6 +9,7 @@ import FacturaNew from './pages/FacturaNew';
 import FacturaBatch from './pages/FacturaBatch';
 import Facturar from './pages/Facturar';
 import Dashboard from './pages/Dashboard';
+import Settings from './pages/Settings';
 
 function NavLink({ to, children, icon: Icon }: { to: string; children: React.ReactNode; icon: React.ElementType }) {
   const location = useLocation();
@@ -63,6 +64,13 @@ function Layout({ children }: { children: React.ReactNode }) {
                   <User size={18} />
                   <span className="text-sm font-medium">{user?.username}</span>
                 </div>
+                <Link
+                  to="/settings"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200"
+                  title="Ajustes"
+                >
+                  <SettingsIcon size={18} />
+                </Link>
                 <button
                   onClick={logout}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
@@ -105,6 +113,7 @@ export default function App() {
                     <Route path="/facturas/batch" element={<FacturaBatch />} />
                     <Route path="/facturas/:id" element={<FacturaEdit />} />
                     <Route path="/facturar" element={<Facturar />} />
+                    <Route path="/settings" element={<Settings />} />
                     <Route path="/stats" element={<Dashboard />} />
                   </Routes>
                 </Layout>

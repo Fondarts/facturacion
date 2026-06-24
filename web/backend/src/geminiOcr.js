@@ -75,7 +75,7 @@ async function postWithRetry(url, body, headers, maxRetries = 4) {
  * @param {string} mimeType    p.ej. 'image/jpeg', 'image/png', 'application/pdf'
  * @returns {Promise<{establishment, date, total, subtotal, tax, taxRate, rawText}>}
  */
-async function extractWithGemini(base64Data, mimeType) {
+async function extractWithGemini(base64Data, mimeType, modelOverride) {
   const apiKey = process.env.GEMINI_API_KEY || '';
   if (!apiKey) {
     const err = new Error('GEMINI_API_KEY no configurada. Agregá GEMINI_API_KEY en web/backend/.env');
@@ -104,10 +104,15 @@ async function extractWithGemini(base64Data, mimeType) {
   const callModel = (model) =>
     postWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, body, headers);
 
+  // Si se eligió un modelo puntual, se prueba primero; el resto queda de respaldo.
+  const models = modelOverride
+    ? [modelOverride, ...GEMINI_MODELS.filter((m) => m !== modelOverride)]
+    : GEMINI_MODELS;
+
   // Probar los modelos en orden hasta que uno responda.
   let response;
   let lastErr;
-  for (const model of GEMINI_MODELS) {
+  for (const model of models) {
     try {
       console.log(`[Gemini] reconociendo con modelo "${model}"…`);
       response = await callModel(model);

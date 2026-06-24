@@ -1,4 +1,5 @@
 import { parseInvoiceText } from './invoiceParser';
+import { getSettings } from '../settings';
 
 export interface ExtractedInvoiceData {
   date: Date | null;
@@ -326,6 +327,9 @@ async function extractViaBackend(imageFile: File, onProgress?: (progress: number
 
   const formData = new FormData();
   formData.append('image', imageFile);
+  // Modelo de Gemini elegido en Ajustes (vacío = automático en el backend)
+  const { geminiModel } = getSettings();
+  if (geminiModel) formData.append('model', geminiModel);
 
   if (onProgress) onProgress(40);
 

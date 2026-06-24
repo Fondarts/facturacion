@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FileText, TrendingUp, Receipt, Plus, ArrowRight } from 'lucide-react';
 import { getStats, getFacturas } from '../api';
 import { Stats, Factura } from '../types';
+import { formatDate } from '../settings';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -135,7 +136,7 @@ export default function Dashboard() {
                   <div>
                     <p className="font-medium text-white">{factura.establecimiento || 'Sin nombre'}</p>
                     <p className="text-sm text-slate-400">
-                      {new Date(factura.fecha).toLocaleDateString('es-ES')}
+                      {formatDate(factura.fecha)}
                     </p>
                   </div>
                 </div>
