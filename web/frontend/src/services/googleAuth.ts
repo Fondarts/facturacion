@@ -6,7 +6,12 @@
  * dentro de un gesto del usuario (click). En el arranque solo inicializamos.
  */
 
-const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || '';
+// El Client ID de OAuth es PÚBLICO por diseño (va embebido en el JS del navegador;
+// lo que protege el acceso es la lista de "Authorized JavaScript origins", no el secreto).
+// Por eso lo dejamos como valor por defecto: así el deploy no depende de una env var.
+// Se puede sobrescribir con VITE_GOOGLE_CLIENT_ID si algún día se usa otro proyecto.
+const DEFAULT_CLIENT_ID = '182242216382-svf8tfmafg0sru19jr0bjhd2qsm4j8qi.apps.googleusercontent.com';
+const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || DEFAULT_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/drive.file email profile';
 
 export interface GoogleUser {
