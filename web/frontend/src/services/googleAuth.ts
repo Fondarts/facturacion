@@ -26,6 +26,21 @@ let accessToken: string | null = null;
 let tokenExpiry = 0;
 let gisPromise: Promise<void> | null = null;
 
+const TOKEN_KEY = 'facturacion_gtoken';
+// Restaurar el token guardado (si sigue vigente) para no re-loguear en cada recarga.
+try {
+  const raw = localStorage.getItem(TOKEN_KEY);
+  if (raw) {
+    const o = JSON.parse(raw);
+    if (o && o.tok && o.exp && Date.now() < o.exp) {
+      accessToken = o.tok;
+      tokenExpiry = o.exp;
+    }
+  }
+} catch {
+  /* ignore */
+}
+
 // Handlers de la solicitud de token en curso (GIS resuelve por callbacks).
 let pendingResolve: ((token: string) => void) | null = null;
 let pendingReject: ((err: Error) => void) | null = null;
@@ -37,6 +52,11 @@ function settleToken(resp: any) {
     accessToken = resp.access_token;
     const ttlMs = (resp.expires_in ? resp.expires_in : 3600) * 1000;
     tokenExpiry = Date.now() + ttlMs - 60 * 1000; // margen de 1 min
+    try {
+      localStorage.setItem(TOKEN_KEY, JSON.stringify({ tok: accessToken, exp: tokenExpiry }));
+    } catch {
+      /* ignore */
+    }
     console.log('🔑 Scopes otorgados por Google:', resp.scope);
     pendingResolve?.(accessToken as string);
   } else {
@@ -142,4 +162,9 @@ export function revokeToken(): void {
   }
   accessToken = null;
   tokenExpiry = 0;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
 }

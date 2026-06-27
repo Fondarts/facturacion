@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { initAuth, requestToken, getUserInfo, revokeToken } from '../services/googleAuth';
+import { initAuth, requestToken, getUserInfo, revokeToken, hasValidToken } from '../services/googleAuth';
 
 export interface User {
   id: string;
@@ -42,7 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth()
       .catch((e) => console.warn('No se pudo inicializar Google Auth:', e))
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (cancelled) return;
+        // Restaurar sesión si hay un token de Google todavía vigente (sin popup).
+        if (hasValidToken()) {
+          try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) setUser(JSON.parse(stored));
+          } catch {
+            /* ignore */
+          }
+        }
+        setIsLoading(false);
       });
     return () => {
       cancelled = true;
