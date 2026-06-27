@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileText, Plus, BarChart3, Home, LogOut, User, Settings as SettingsIcon } from 'lucide-react';
+import { FileText, Receipt, BarChart3, Home, LogOut, User, Settings as SettingsIcon } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -50,14 +50,8 @@ function Layout({ children }: { children: React.ReactNode }) {
             <nav className="flex items-center gap-2">
               <NavLink to="/" icon={Home}>{t('nav.home')}</NavLink>
               <NavLink to="/facturas" icon={FileText}>{t('nav.expenses')}</NavLink>
+              <NavLink to="/generadas" icon={Receipt}>{t('nav.invoices')}</NavLink>
               <NavLink to="/stats" icon={BarChart3}>{t('nav.stats')}</NavLink>
-              <Link
-                to="/facturar"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
-              >
-                <Plus size={18} />
-                {t('nav.invoice')}
-              </Link>
               
               {/* Usuario y logout */}
               <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-700/50">
@@ -114,6 +108,7 @@ export default function App() {
                     <Route path="/facturas/batch" element={<FacturaBatch />} />
                     <Route path="/facturas/:id" element={<FacturaEdit />} />
                     <Route path="/facturar" element={<Facturar />} />
+                    <Route path="/generadas" element={<FacturasList lockedTipo="generada" />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/stats" element={<Dashboard />} />
                   </Routes>

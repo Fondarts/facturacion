@@ -51,13 +51,22 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
           <p className="text-slate-400">{t('dash.subtitle')}</p>
         </div>
-        <Link
-          to="/facturas/nueva"
-          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
-        >
-          <Plus size={20} />
-          {t('dash.addExpense')}
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/facturar"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:from-amber-600 hover:to-orange-600 transition-all duration-200 shadow-lg shadow-amber-500/20"
+          >
+            <Plus size={20} />
+            {t('nav.invoice')}
+          </Link>
+          <Link
+            to="/facturas/nueva"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
+          >
+            <Plus size={20} />
+            {t('dash.addExpense')}
+          </Link>
+        </div>
       </div>
 
       {/* Stats cards */}

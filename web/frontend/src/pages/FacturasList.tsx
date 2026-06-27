@@ -19,7 +19,7 @@ interface MonthGroup {
   cantidadGeneradas: number;
 }
 
-export default function FacturasList() {
+export default function FacturasList({ lockedTipo }: { lockedTipo?: 'recibida' | 'generada' } = {}) {
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -72,7 +72,7 @@ export default function FacturasList() {
   const filteredFacturas = facturas.filter(f => {
     const matchesSearch = f.establecimiento?.toLowerCase().includes(search.toLowerCase()) ||
                          f.concepto?.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === 'todas' || f.tipo === filter;
+    const matchesFilter = lockedTipo ? f.tipo === lockedTipo : (filter === 'todas' || f.tipo === filter);
     return matchesSearch && matchesFilter;
   });
 
@@ -331,24 +331,40 @@ export default function FacturasList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">{t('list.title')}</h1>
-          <p className="text-slate-400">{t('list.count', { n: facturas.length })}</p>
+          <h1 className="text-3xl font-bold text-white mb-2">{lockedTipo === 'generada' ? t('list.invoicesTitle') : t('list.title')}</h1>
+          <p className="text-slate-400">
+            {lockedTipo === 'generada'
+              ? t('list.invoicesCount', { n: facturas.filter((f) => f.tipo === 'generada').length })
+              : t('list.count', { n: facturas.length })}
+          </p>
         </div>
         <div className="flex gap-3">
-          <Link
-            to="/facturas/batch"
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium hover:bg-amber-500/30 transition-all duration-200"
-          >
-            <Upload size={20} />
-            {t('list.batch')}
-          </Link>
-          <Link
-            to="/facturas/nueva"
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
-          >
-            <Plus size={20} />
-            {t('dash.addExpense')}
-          </Link>
+          {lockedTipo === 'generada' ? (
+            <Link
+              to="/facturar"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:from-amber-600 hover:to-orange-600 transition-all duration-200 shadow-lg shadow-amber-500/20"
+            >
+              <Plus size={20} />
+              {t('nav.invoice')}
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/facturas/batch"
+                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium hover:bg-amber-500/30 transition-all duration-200"
+              >
+                <Upload size={20} />
+                {t('list.batch')}
+              </Link>
+              <Link
+                to="/facturas/nueva"
+                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
+              >
+                <Plus size={20} />
+                {t('dash.addExpense')}
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -365,12 +381,13 @@ export default function FacturasList() {
           />
         </div>
         
+        {!lockedTipo && (
         <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-1">
           <button
             onClick={() => setFilter('todas')}
             className={`px-4 py-2 rounded-lg transition-all ${
-              filter === 'todas' 
-                ? 'bg-emerald-500/20 text-emerald-400' 
+              filter === 'todas'
+                ? 'bg-emerald-500/20 text-emerald-400'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -379,8 +396,8 @@ export default function FacturasList() {
           <button
             onClick={() => setFilter('recibida')}
             className={`px-4 py-2 rounded-lg transition-all ${
-              filter === 'recibida' 
-                ? 'bg-emerald-500/20 text-emerald-400' 
+              filter === 'recibida'
+                ? 'bg-emerald-500/20 text-emerald-400'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -389,14 +406,15 @@ export default function FacturasList() {
           <button
             onClick={() => setFilter('generada')}
             className={`px-4 py-2 rounded-lg transition-all ${
-              filter === 'generada' 
-                ? 'bg-amber-500/20 text-amber-400' 
+              filter === 'generada'
+                ? 'bg-amber-500/20 text-amber-400'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             {t('list.filterIssued')}
           </button>
         </div>
+        )}
       </div>
 
       {/* Facturas agrupadas por mes */}
@@ -404,14 +422,16 @@ export default function FacturasList() {
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-12 border border-slate-700/50 text-center">
           <FileText className="mx-auto text-slate-600 mb-4" size={48} />
           <p className="text-slate-400 mb-4">
-            {search || filter !== 'todas' ? t('list.emptyFiltered') : t('list.empty')}
+            {lockedTipo === 'generada'
+              ? t('list.invoicesEmpty')
+              : search || filter !== 'todas' ? t('list.emptyFiltered') : t('list.empty')}
           </p>
           <Link
-            to="/facturas/nueva"
+            to={lockedTipo === 'generada' ? '/facturar' : '/facturas/nueva'}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
           >
             <Plus size={18} />
-            {t('dash.addFirst')}
+            {lockedTipo === 'generada' ? t('nav.invoice') : t('dash.addFirst')}
           </Link>
         </div>
       ) : (
