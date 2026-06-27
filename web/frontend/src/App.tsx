@@ -103,7 +103,7 @@ export default function App() {
                 <Layout>
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
-                    <Route path="/facturas" element={<FacturasList />} />
+                    <Route path="/facturas" element={<FacturasList lockedTipo="recibida" />} />
                     <Route path="/facturas/nueva" element={<FacturaNew />} />
                     <Route path="/facturas/batch" element={<FacturaBatch />} />
                     <Route path="/facturas/:id" element={<FacturaEdit />} />

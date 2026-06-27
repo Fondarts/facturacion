@@ -335,7 +335,7 @@ export default function FacturasList({ lockedTipo }: { lockedTipo?: 'recibida' |
           <p className="text-slate-400">
             {lockedTipo === 'generada'
               ? t('list.invoicesCount', { n: facturas.filter((f) => f.tipo === 'generada').length })
-              : t('list.count', { n: facturas.length })}
+              : t('list.count', { n: lockedTipo ? facturas.filter((f) => f.tipo === lockedTipo).length : facturas.length })}
           </p>
         </div>
         <div className="flex gap-3">
