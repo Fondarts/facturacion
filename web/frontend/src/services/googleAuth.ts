@@ -26,6 +26,16 @@ let accessToken: string | null = null;
 let tokenExpiry = 0;
 let gisPromise: Promise<void> | null = null;
 
+// --- Sesión larga vía servidor (OAuth code flow + refresh token en cookie httpOnly) ---
+// Es ADITIVO: si los endpoints /api/auth/* no están configurados (sin GOOGLE_CLIENT_SECRET
+// en Vercel) o no existen (dev local), serverAvailable queda en false y todo cae al token
+// client clásico (~1h). Así nada se rompe mientras no se active.
+let codeClient: any = null;
+let serverSession = false; // true cuando la sesión la respalda la cookie del servidor
+let serverAvailable: boolean | null = null; // null = sin probar; false = endpoints no configurados
+let pendingCode: { resolve: (c: string) => void; reject: (e: Error) => void } | null = null;
+const AUTH_BASE = '/api/auth';
+
 const TOKEN_KEY = 'facturacion_gtoken';
 // Restaurar el token guardado (si sigue vigente) para no re-loguear en cada recarga.
 try {
@@ -73,6 +83,31 @@ function settleError(err: any) {
   pendingReject = null;
 }
 
+/** Aplica un token recibido del servidor (code flow / refresh). */
+function applyServerToken(data: any): void {
+  if (!data || !data.access_token) throw new Error('Respuesta de sesión inválida');
+  accessToken = data.access_token;
+  const ttlMs = (data.expires_in ? data.expires_in : 3600) * 1000;
+  tokenExpiry = Date.now() + ttlMs - 60 * 1000; // margen de 1 min
+  serverSession = true;
+  // La sesión persiste en la cookie httpOnly del servidor; no guardamos el token en localStorage.
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function settleCode(resp: any) {
+  if (resp && resp.code) pendingCode?.resolve(resp.code);
+  else pendingCode?.reject(new Error(resp?.error_description || resp?.error || 'No se obtuvo el código de Google'));
+  pendingCode = null;
+}
+function settleCodeError(err: any) {
+  pendingCode?.reject(new Error(err?.type || 'No se pudo abrir el inicio de sesión de Google'));
+  pendingCode = null;
+}
+
 /** Carga el script de Google Identity Services una sola vez. */
 function loadGis(): Promise<void> {
   if (gisPromise) return gisPromise;
@@ -110,6 +145,16 @@ export async function initAuth(): Promise<void> {
       error_callback: settleError,
     });
   }
+  // Code client para la sesión larga (devuelve un código que el servidor canjea por refresh token).
+  if (!codeClient && (window as any).google.accounts.oauth2.initCodeClient) {
+    codeClient = (window as any).google.accounts.oauth2.initCodeClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      ux_mode: 'popup',
+      callback: settleCode,
+      error_callback: settleCodeError,
+    });
+  }
 }
 
 /**
@@ -135,9 +180,88 @@ export function requestToken(interactive = true): Promise<string> {
   });
 }
 
-/** Token válido en memoria, o pide uno nuevo (abre popup si hace falta). */
+/**
+ * Intenta restaurar la sesión usando la cookie httpOnly del servidor (sin popup).
+ * Devuelve true si quedó una sesión activa. De paso marca si los endpoints están configurados.
+ */
+export async function restoreServerSession(): Promise<boolean> {
+  try {
+    const res = await fetch(`${AUTH_BASE}/refresh`, { method: 'POST', credentials: 'include' });
+    if (res.status === 404 || res.status === 501) {
+      serverAvailable = false;
+      return false;
+    }
+    serverAvailable = true;
+    if (res.ok) {
+      applyServerToken(await res.json());
+      return true;
+    }
+    return false; // 401 'no_session': configurado pero sin sesión previa
+  } catch {
+    serverAvailable = false;
+    return false;
+  }
+}
+
+/** Pide un código de autorización (abre popup). Debe llamarse dentro de un click. */
+function requestCode(): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    if (!codeClient) {
+      reject(new Error('La autenticación todavía no está lista, probá de nuevo en un segundo'));
+      return;
+    }
+    pendingCode = { resolve, reject };
+    try {
+      codeClient.requestCode();
+    } catch (e) {
+      pendingCode = null;
+      reject(e as Error);
+    }
+  });
+}
+
+/** Login con code flow: popup → código → /api/auth/exchange (deja el refresh token en cookie). */
+async function serverLogin(): Promise<boolean> {
+  const code = await requestCode();
+  const res = await fetch(`${AUTH_BASE}/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ code, redirect_uri: 'postmessage' }),
+  });
+  if (res.status === 404 || res.status === 501) {
+    serverAvailable = false;
+    return false;
+  }
+  if (!res.ok) throw new Error('No se pudo completar el inicio de sesión en el servidor');
+  applyServerToken(await res.json());
+  return true;
+}
+
+/**
+ * Inicia sesión de forma interactiva (popup). Usa el code flow del servidor si está
+ * disponible (sesión larga); si no, cae al token client clásico (~1h).
+ */
+export async function interactiveLogin(): Promise<void> {
+  await initAuth();
+  if (serverAvailable === null) {
+    await restoreServerSession(); // averigua disponibilidad y, si hay cookie, restaura
+    if (serverSession && hasValidToken()) return;
+  }
+  if (serverAvailable) {
+    if (await serverLogin()) return;
+  }
+  await requestToken(true);
+}
+
+/** Token válido en memoria, o pide uno nuevo (renueva por servidor o abre popup). */
 export async function getAccessToken(): Promise<string> {
   if (accessToken && Date.now() < tokenExpiry) return accessToken;
+  // Sesión de servidor: renovar con la cookie httpOnly (sin popup).
+  if (serverSession) {
+    const ok = await restoreServerSession();
+    if (ok && accessToken && Date.now() < tokenExpiry) return accessToken;
+  }
   await initAuth();
   return requestToken(true);
 }
@@ -160,8 +284,13 @@ export function revokeToken(): void {
   if (accessToken && (window as any).google?.accounts?.oauth2) {
     (window as any).google.accounts.oauth2.revoke(accessToken, () => {});
   }
+  // Cerrar también la sesión de servidor (borra la cookie del refresh token).
+  if (serverSession) {
+    fetch(`${AUTH_BASE}/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+  }
   accessToken = null;
   tokenExpiry = 0;
+  serverSession = false;
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {

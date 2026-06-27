@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { initAuth, requestToken, getUserInfo, revokeToken, hasValidToken } from '../services/googleAuth';
+import { initAuth, interactiveLogin, getUserInfo, revokeToken, hasValidToken, restoreServerSession } from '../services/googleAuth';
 
 export interface User {
   id: string;
@@ -41,18 +41,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     initAuth()
       .catch((e) => console.warn('No se pudo inicializar Google Auth:', e))
-      .finally(() => {
+      .finally(async () => {
         if (cancelled) return;
-        // Restaurar sesión si hay un token de Google todavía vigente (sin popup).
-        if (hasValidToken()) {
+        // 1) Sesión larga: restaurar vía cookie httpOnly del servidor (sin popup).
+        let restored = false;
+        try {
+          restored = await restoreServerSession();
+        } catch {
+          /* ignore */
+        }
+        if (cancelled) return;
+        // 2) Si hay sesión (servidor o token clásico vigente), recuperar el usuario.
+        if (restored || hasValidToken()) {
           try {
             const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) setUser(JSON.parse(stored));
+            if (stored) {
+              setUser(JSON.parse(stored));
+            } else {
+              // Sesión de servidor sin user guardado: traerlo de Google.
+              const info = await getUserInfo();
+              if (!cancelled) {
+                persist({ id: info.sub, username: info.name || info.email, email: info.email, picture: info.picture });
+              }
+            }
           } catch {
             /* ignore */
           }
         }
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -61,8 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (): Promise<boolean> => {
     try {
-      await initAuth(); // garantiza que el token client exista (normalmente ya lo está)
-      await requestToken(true); // abre el popup de Google (dentro del click)
+      // Code flow (sesión larga) si el servidor lo soporta; si no, token client clásico.
+      await interactiveLogin();
       const info = await getUserInfo();
       persist({ id: info.sub, username: info.name || info.email, email: info.email, picture: info.picture });
       return true;
