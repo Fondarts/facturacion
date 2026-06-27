@@ -8,6 +8,9 @@
  * Es la versión "online" del mismo OCR que el backend Express usa en local.
  */
 
+// Vercel: más tiempo de ejecución (Gemini puede tardar varios segundos + reintentos).
+export const config = { maxDuration: 60 };
+
 const GEMINI_MODELS = (process.env.GEMINI_MODELS || 'gemini-2.5-flash-lite,gemini-2.5-flash')
   .split(',')
   .map((s) => s.trim())
@@ -118,7 +121,7 @@ async function callModel(model, base64, mime, apiKey, maxRetries = 4) {
   }
 }
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Método no permitido' });
     return;
