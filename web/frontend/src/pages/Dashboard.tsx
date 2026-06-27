@@ -66,8 +66,8 @@ export default function Dashboard() {
               <FileText className="text-emerald-400" size={24} />
             </div>
             <div>
-              <p className="text-slate-400 text-sm">{t('dash.totalExpenses')}</p>
-              <p className="text-2xl font-bold text-white">{stats?.totalFacturas || 0}</p>
+              <p className="text-slate-400 text-sm">{t('dash.invoiced')}</p>
+              <p className="text-2xl font-bold text-white">{formatCurrency(stats?.totalFacturado || 0)}</p>
             </div>
           </div>
         </div>
@@ -97,8 +97,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent invoices */}
-      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm overflow-hidden">
+      {/* Gastos recientes + Gastos por mes, lado a lado a la misma altura */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm overflow-hidden flex flex-col">
         <div className="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">{t('dash.recent')}</h2>
           <Link to="/facturas" className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 text-sm">
@@ -151,10 +152,10 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Monthly chart placeholder */}
-      {stats?.porMes && stats.porMes.length > 0 && (
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 backdrop-blur-sm">
+      {/* Monthly chart (segunda columna) */}
+        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 backdrop-blur-sm h-full">
           <h2 className="text-lg font-semibold text-white mb-4">{t('dash.byMonth')}</h2>
+          {stats?.porMes && stats.porMes.length > 0 ? (
           <div className="space-y-3">
             {stats.porMes.map((mes) => (
               <div key={mes.mes} className="flex items-center gap-4">
@@ -171,8 +172,11 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+          ) : (
+            <p className="text-slate-500 text-sm">Sin datos todavía</p>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

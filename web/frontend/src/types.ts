@@ -34,6 +34,7 @@ export interface FacturaItem {
 export interface Stats {
   totalFacturas: number;
   totalGastado: number;
+  totalFacturado: number;
   totalIva: number;
   porMes: { mes: string; total: number; cantidad: number }[];
 }

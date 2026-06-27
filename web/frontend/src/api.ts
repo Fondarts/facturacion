@@ -162,6 +162,9 @@ export async function getStats(): Promise<Stats> {
   const totalFacturas = facturas.length;
   const totalGastado = recibidas.reduce((sum, f) => sum + (f.total || 0), 0);
   const totalIva = recibidas.reduce((sum, f) => sum + (f.iva || 0), 0);
+  const totalFacturado = facturas
+    .filter((f) => f.tipo === 'generada')
+    .reduce((sum, f) => sum + (f.total || 0), 0);
 
   const porMesMap = new Map<string, { total: number; cantidad: number }>();
   recibidas.forEach((f) => {
@@ -178,7 +181,7 @@ export async function getStats(): Promise<Stats> {
     .sort((a, b) => b.mes.localeCompare(a.mes))
     .slice(0, 12);
 
-  return { totalFacturas, totalGastado, totalIva, porMes };
+  return { totalFacturas, totalGastado, totalFacturado, totalIva, porMes };
 }
 
 // ==================== CLIENTES Y EMISORES ====================
