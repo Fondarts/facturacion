@@ -11,7 +11,6 @@ import com.facturacion.app.ui.screens.addinvoice.AddInvoiceScreen
 import com.facturacion.app.ui.screens.editinvoice.EditInvoiceScreen
 import com.facturacion.app.ui.screens.invoicelist.InvoiceListScreen
 import com.facturacion.app.ui.screens.invoicepreview.InvoicePreviewScreen
-import com.facturacion.app.ui.screens.sync.SyncScreen
 
 sealed class Screen(val route: String) {
     object InvoiceList : Screen("invoice_list")
@@ -22,7 +21,6 @@ sealed class Screen(val route: String) {
     object InvoicePreview : Screen("invoice_preview/{invoiceId}") {
         fun createRoute(invoiceId: Long) = "invoice_preview/$invoiceId"
     }
-    object Sync : Screen("sync")
 }
 
 @Composable
@@ -45,8 +43,7 @@ fun InvoiceNavigation(
                 },
                 onNavigateToPreview = { invoiceId ->
                     navController.navigate(Screen.InvoicePreview.createRoute(invoiceId))
-                },
-                onNavigateToSync = { navController.navigate(Screen.Sync.route) }
+                }
             )
         }
         
@@ -84,12 +81,7 @@ fun InvoiceNavigation(
             }
         }
         
-        composable(Screen.Sync.route) {
-            SyncScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
-        }
-    }
+}
 }
 
 
