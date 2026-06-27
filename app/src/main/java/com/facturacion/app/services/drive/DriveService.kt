@@ -2,6 +2,7 @@ package com.facturacion.app.services.drive
 
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,7 @@ import java.util.concurrent.TimeUnit
  */
 class DriveService(private val accessToken: String) {
     private val gson = Gson()
+    private val prettyGson = GsonBuilder().setPrettyPrinting().create() // facturas.json legible
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -114,7 +116,7 @@ class DriveService(private val accessToken: String) {
             }
         } else JsonArray()
         arr.add(gson.toJsonTree(factura))
-        val content = gson.toJson(arr)
+        val content = prettyGson.toJson(arr)
         if (existingId != null) {
             val req = bearer(Request.Builder().url("$UPLOAD/$existingId?uploadType=media"))
                 .patch(content.toRequestBody(JSON.toMediaType())).build()

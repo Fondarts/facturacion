@@ -133,7 +133,7 @@ export async function readJson<T>(name: string, fallback: T): Promise<T> {
 
 /** Crea o sobreescribe un JSON en el subfolder _datos. */
 export async function writeJson(name: string, obj: unknown): Promise<void> {
-  const content = JSON.stringify(obj);
+  const content = JSON.stringify(obj, null, 2); // indentado para que sea legible en Drive
   const existingId = await findFileInData(name);
 
   if (existingId) {
