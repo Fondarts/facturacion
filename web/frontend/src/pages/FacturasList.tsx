@@ -415,20 +415,20 @@ export default function FacturasList() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {groupedByMonth.map((group) => (
-            <div key={group.month} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div key={group.month} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl border border-slate-700/50 overflow-hidden">
               {/* Month Header - Clickable */}
               <button
                 onClick={() => toggleMonth(group.month)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-700/20 transition-colors"
+                className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-slate-700/20 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                    <Calendar className="text-emerald-400" size={20} />
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <Calendar className="text-emerald-400" size={16} />
                   </div>
                   <div className="text-left">
-                    <h2 className="text-xl font-bold text-white">{group.monthName}</h2>
+                    <h2 className="text-base font-bold text-white">{group.monthName}</h2>
                     <p className="text-slate-400 text-sm">{group.facturas.length} factura{group.facturas.length !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
@@ -476,20 +476,20 @@ export default function FacturasList() {
                   {group.facturas.map((factura, index) => (
                     <div
                       key={factura.id}
-                      className={`px-6 py-4 flex items-center justify-between hover:bg-slate-700/20 transition-colors group ${
+                      className={`px-4 py-2 flex items-center justify-between hover:bg-slate-700/20 transition-colors group ${
                         index !== group.facturas.length - 1 ? 'border-b border-slate-700/30' : ''
                       }`}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                          factura.tipo === 'generada' 
-                            ? 'bg-amber-500/20 text-amber-400' 
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          factura.tipo === 'generada'
+                            ? 'bg-amber-500/20 text-amber-400'
                             : 'bg-slate-700/50 text-slate-400'
                         }`}>
-                          <FileText size={20} />
+                          <FileText size={16} />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-white">{factura.establecimiento || 'Sin nombre'}</h3>
+                          <h3 className="font-semibold text-white text-sm">{factura.establecimiento || 'Sin nombre'}</h3>
                           <p className="text-slate-500 text-sm">
                             {new Date(factura.fecha + 'T00:00:00').toLocaleDateString('es-ES', { 
                               weekday: 'short', 
@@ -502,7 +502,7 @@ export default function FacturasList() {
                       
                       <div className="flex items-center gap-4">
                         <div className="text-right min-w-[140px]">
-                          <p className="text-lg font-bold text-white">{formatCurrency(factura.total)}</p>
+                          <p className="text-base font-bold text-white">{formatCurrency(factura.total)}</p>
                           <div className="flex gap-3 text-xs text-slate-500 justify-end">
                             <span>Base: {formatCurrency(factura.subtotal)}</span>
                             <span>IVA: {formatCurrency(factura.iva)}</span>
