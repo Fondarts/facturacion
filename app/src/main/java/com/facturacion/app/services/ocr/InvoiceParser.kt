@@ -237,10 +237,10 @@ object InvoiceParser {
     
     private fun extractDate(text: String): Date? {
         val datePatterns = listOf(
+            // Formato: YYYY/MM/DD o YYYY-MM-DD (ISO PRIMERO: si no, "2025-01-15" se lee como 2015-01-25)
+            Regex("(\\d{4})[/\\-](\\d{1,2})[/\\-](\\d{1,2})"),
             // Formato: DD/MM/YYYY o DD-MM-YYYY
             Regex("(\\d{1,2})[/\\-](\\d{1,2})[/\\-](\\d{2,4})"),
-            // Formato: YYYY/MM/DD o YYYY-MM-DD
-            Regex("(\\d{4})[/\\-](\\d{1,2})[/\\-](\\d{1,2})"),
             // Formato: FECHADD/MM/YYYY (sin espacio)
             Regex("FECHA[:\\s]*(\\d{1,2})[/\\-](\\d{1,2})[/\\-](\\d{2,4})", RegexOption.IGNORE_CASE),
             // Formato: "Fecha de factura: DD/MM/YYYY"

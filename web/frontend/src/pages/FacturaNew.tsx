@@ -162,6 +162,10 @@ export default function FacturaNew() {
       updates.total = ocrResults.total;
     }
 
+    if (ocrResults.category && !formData.concepto) {
+      updates.concepto = ocrResults.category;
+    }
+
     // Recalcular si tenemos subtotal y tasa
     if (updates.subtotal != null && updates.tasa_iva != null) {
       const iva = updates.subtotal * (updates.tasa_iva / 100);

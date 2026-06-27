@@ -25,7 +25,8 @@ data class ExtractedInvoiceData(
     val tax: Double?,
     val taxRate: Double?,
     val rawText: String,
-    val confidence: Float
+    val confidence: Float,
+    val category: String? = null
 )
 
 /**
@@ -37,6 +38,9 @@ class OcrService(private val context: Context) {
     
     // ML Kit Text Recognizer - optimizado para texto latino/español
     private val textRecognizer: TextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+    // OCR remoto (Gemini, misma calidad que la web). Es el motor principal.
+    private val remoteOcr = RemoteOcrService()
     
     /**
      * Extrae texto crudo de una imagen usando ML Kit
@@ -69,8 +73,19 @@ class OcrService(private val context: Context) {
      */
     suspend fun extractInvoiceData(bitmap: Bitmap): ExtractedInvoiceData = withContext(Dispatchers.IO) {
         Log.d(TAG, "Procesando bitmap: ${bitmap.width}x${bitmap.height} pixels")
-        
-        // 1. Extraer texto usando ML Kit
+
+        // 0. Intentar OCR remoto con Gemini (misma calidad que la web). Si falla, ML Kit local.
+        try {
+            val remoteData = remoteOcr.extractInvoiceData(bitmap)
+            if (remoteData.total != null || remoteData.establishment != null || remoteData.rawText.isNotBlank()) {
+                Log.d(TAG, "OCR remoto (Gemini) OK")
+                return@withContext remoteData
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "OCR remoto falló, usando ML Kit local: ${e.message}")
+        }
+
+        // 1. Extraer texto usando ML Kit (fallback offline)
         val rawText = extractTextFromBitmap(bitmap)
         
         if (rawText.isBlank()) {

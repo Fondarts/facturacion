@@ -24,6 +24,7 @@ Analiza la imagen o PDF de la factura y extrae los datos. Reglas estrictas:
 - subtotal: base imponible (importe SIN IVA), como número.
 - tax: importe del IVA en euros, como número. NUNCA el porcentaje.
 - taxRate: tipo de IVA como fracción decimal (0.10 para 10%, 0.21 para 21%, 0.04 para 4%).
+- category: categoría del gasto. UNA de exactamente estas: "Comida", "Transporte", "Oficina", "Servicios", "Suministros", "Otros". Elegí la más adecuada según el comercio.
 - Usa punto como separador decimal. Devuelve null en los campos que no aparezcan claramente. NO inventes valores.
 - rawText: transcribe el texto principal visible de la factura.`;
 
@@ -36,6 +37,7 @@ const RESPONSE_SCHEMA = {
     subtotal: { type: 'number', nullable: true },
     tax: { type: 'number', nullable: true },
     taxRate: { type: 'number', nullable: true },
+    category: { type: 'string', nullable: true },
     rawText: { type: 'string', nullable: true },
   },
   required: ['establishment', 'date', 'total', 'subtotal', 'tax', 'taxRate'],
@@ -178,6 +180,7 @@ export default async (req, res) => {
       subtotal: rec.subtotal,
       tax: rec.tax,
       taxRate: rec.taxRate,
+      category: parsed.category || null,
       rawText: parsed.rawText || '',
       consistent: rec.consistent,
       confidence: computeConfidence({ ...parsed, ...rec }, rec.consistent),

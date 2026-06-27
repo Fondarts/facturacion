@@ -76,7 +76,14 @@ fun InvoiceForm(
             else formatTaxRateAsPercent(extractedData?.taxRate)
         )
     }
-    var selectedCategoryId by remember { mutableStateOf<Long?>(initialInvoice?.categoryId) }
+    var selectedCategoryId by remember {
+        mutableStateOf<Long?>(
+            initialInvoice?.categoryId
+                ?: extractedData?.category?.let { cat ->
+                    categories.find { it.name.equals(cat, ignoreCase = true) }?.id
+                }
+        )
+    }
     var notes by remember { mutableStateOf(initialInvoice?.notes ?: "") }
     
     var showDatePicker by remember { mutableStateOf(false) }

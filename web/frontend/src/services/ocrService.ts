@@ -10,6 +10,7 @@ export interface ExtractedInvoiceData {
   taxRate: number | null;
   rawText: string;
   confidence: number;
+  category?: string | null;
   structure?: any;
   tables?: any[];
 }
@@ -425,6 +426,7 @@ async function extractViaBackend(imageFile: File, onProgress?: (progress: number
       taxRate: data.taxRate != null ? parseFloat(data.taxRate) : null,
       rawText: data.rawText || '',
       confidence: data.confidence != null ? parseFloat(data.confidence) : 0.5,
+      category: data.category ?? null,
       structure: data.structure,
       tables: data.tables,
     };

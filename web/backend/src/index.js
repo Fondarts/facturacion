@@ -303,6 +303,7 @@ app.post('/api/ocr/process', async (req, res) => {
           subtotal: rec.subtotal,
           tax: rec.tax,
           taxRate: rec.taxRate,
+          category: raw.category || null,
           rawText: raw.rawText || '',
           consistent: rec.consistent,
           confidence: computeConfidence({ ...raw, ...rec }, rec.consistent),
