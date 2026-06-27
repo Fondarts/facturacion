@@ -63,7 +63,8 @@ export default function FacturaBatch() {
 
   async function processInvoiceOCR(invoiceId: string) {
     const invoice = invoices.find((inv) => inv.id === invoiceId);
-    if (!invoice || !invoice.file.type.startsWith('image/')) {
+    const supported = !!invoice && (invoice.file.type.startsWith('image/') || invoice.file.type === 'application/pdf');
+    if (!supported) {
       alert(t('batch.alertOnlyImages'));
       return;
     }
@@ -104,7 +105,8 @@ export default function FacturaBatch() {
     await initializeOCR();
 
     for (const invoice of invoices) {
-      if (invoice.file.type.startsWith('image/') && !invoice.ocrResults) {
+      const supported = invoice.file.type.startsWith('image/') || invoice.file.type === 'application/pdf';
+      if (supported && !invoice.ocrResults) {
         await processInvoiceOCR(invoice.id);
         // Pequeña pausa entre procesamientos para no saturar
         await new Promise((resolve) => setTimeout(resolve, 500));

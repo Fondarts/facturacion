@@ -123,7 +123,7 @@ const es: Dict = {
   'batch.conceptPlaceholder': 'Descripción',
   'batch.save': 'Guardar',
   'batch.emptyHint': 'Selecciona hasta 10 facturas para procesarlas en lote',
-  'batch.alertOnlyImages': 'Solo se pueden procesar imágenes con OCR',
+  'batch.alertOnlyImages': 'Solo se pueden procesar imágenes o PDFs con OCR',
   'batch.alertProcessError': 'Error al procesar la imagen. Por favor, intenta de nuevo.',
   'batch.alertSaveError': 'Error al guardar la factura',
   // Facturar
@@ -318,7 +318,7 @@ const en: Dict = {
   'batch.conceptPlaceholder': 'Description',
   'batch.save': 'Save',
   'batch.emptyHint': 'Select up to 10 invoices to process them in batch',
-  'batch.alertOnlyImages': 'Only images can be processed with OCR',
+  'batch.alertOnlyImages': 'Only images or PDFs can be processed with OCR',
   'batch.alertProcessError': 'Error processing the image. Please try again.',
   'batch.alertSaveError': 'Error saving the invoice',
   // Facturar
