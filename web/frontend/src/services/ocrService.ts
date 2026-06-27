@@ -370,9 +370,12 @@ async function extractViaBackend(imageFile: File, onProgress?: (progress: number
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutos
 
+    const appToken = (import.meta.env.VITE_OCR_TOKEN as string) || '';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (appToken) headers['x-app-token'] = appToken;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ image: dataUri, model: geminiModel || undefined }),
       signal: controller.signal,
     });

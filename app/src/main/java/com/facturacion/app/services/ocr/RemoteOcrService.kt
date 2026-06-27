@@ -2,6 +2,7 @@ package com.facturacion.app.services.ocr
 
 import android.graphics.Bitmap
 import android.util.Base64
+import com.facturacion.app.BuildConfig
 import android.util.Log
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +64,9 @@ class RemoteOcrService(
             if (!model.isNullOrBlank()) payload["model"] = model
             val body = gson.toJson(payload).toRequestBody("application/json".toMediaType())
 
-            val request = Request.Builder().url(endpoint).post(body).build()
+            val reqBuilder = Request.Builder().url(endpoint).post(body)
+            if (BuildConfig.OCR_TOKEN.isNotEmpty()) reqBuilder.header("x-app-token", BuildConfig.OCR_TOKEN)
+            val request = reqBuilder.build()
             client.newCall(request).execute().use { resp ->
                 val text = resp.body?.string() ?: ""
                 if (!resp.isSuccessful) {

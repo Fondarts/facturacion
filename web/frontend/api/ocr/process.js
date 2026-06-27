@@ -128,6 +128,12 @@ export default async (req, res) => {
     res.status(405).json({ error: 'Método no permitido' });
     return;
   }
+  // Protección: si OCR_APP_TOKEN está configurado, exigir el header x-app-token.
+  const APP_TOKEN = process.env.OCR_APP_TOKEN || '';
+  if (APP_TOKEN && req.headers['x-app-token'] !== APP_TOKEN) {
+    res.status(401).json({ error: 'No autorizado' });
+    return;
+  }
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {

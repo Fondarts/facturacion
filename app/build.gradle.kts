@@ -5,6 +5,14 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Token para autorizar las llamadas al OCR serverless. Se lee de local.properties
+// (NO se commitea). Debe coincidir con OCR_APP_TOKEN en las env vars de Vercel.
+val ocrAppToken: String = java.util.Properties().run {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+    getProperty("OCR_TOKEN") ?: ""
+}
+
 android {
     namespace = "com.facturacion.app"
     compileSdk = 34
@@ -20,6 +28,8 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("String", "OCR_TOKEN", "\"$ocrAppToken\"")
     }
 
     signingConfigs {
@@ -59,6 +69,7 @@ android {
     
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     
     // Fix para KAPT con Java 17+
