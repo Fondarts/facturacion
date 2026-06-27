@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, Upload, Scan, X, Check } from 'lucide-react';
 import { createFactura } from '../api';
 import { extractInvoiceData, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
+import { t } from '../i18n';
 
 export default function FacturaNew() {
   const navigate = useNavigate();
@@ -68,13 +69,13 @@ export default function FacturaNew() {
 
   async function handleProcessOCR() {
     if (!archivo) {
-      alert('Por favor, selecciona una imagen o PDF primero');
+      alert(t('new.alertSelectFirst'));
       return;
     }
 
     // Procesar imágenes y PDFs
     if (!archivo.type.startsWith('image/') && archivo.type !== 'application/pdf') {
-      alert('El OCR funciona con imágenes (JPG, PNG, etc.) o PDFs. Por favor, selecciona un archivo compatible.');
+      alert(t('new.alertInvalidType'));
       return;
     }
 
@@ -87,7 +88,7 @@ export default function FacturaNew() {
       console.error('⏱️ Timeout: El OCR tardó más de 3 minutos');
       setProcessingOCR(false);
       setOcrProgress(0);
-      alert('El procesamiento OCR está tardando demasiado. Por favor, intenta con una imagen más pequeña o verifica tu conexión a internet.');
+      alert(t('new.alertTimeout'));
     }, 180000); // 3 minutos
 
     try {
@@ -121,7 +122,7 @@ export default function FacturaNew() {
       console.error('❌ Error procesando OCR:', error);
       console.error('❌ Tipo de error:', typeof error);
       console.error('❌ Stack:', error?.stack);
-      const errorMessage = error?.message || 'Error al procesar la imagen. Por favor, intenta de nuevo.';
+      const errorMessage = error?.message || t('new.alertProcessError');
       alert(errorMessage);
     } finally {
       clearTimeout(timeoutId);
@@ -196,8 +197,8 @@ export default function FacturaNew() {
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">Ingresar Gasto</h1>
-          <p className="text-slate-400">Registrar un gasto</p>
+          <h1 className="text-2xl font-bold text-white">{t('new.title')}</h1>
+          <p className="text-slate-400">{t('new.subtitle')}</p>
         </div>
       </div>
 
@@ -207,7 +208,7 @@ export default function FacturaNew() {
           {/* Archivo */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Archivo (opcional)
+              {t('new.fileLabel')}
             </label>
             <div 
               className="border-2 border-dashed border-slate-700/50 rounded-xl p-8 text-center hover:border-emerald-500/50 transition-colors cursor-pointer"
@@ -242,19 +243,19 @@ export default function FacturaNew() {
                       {processingOCR ? (
                         <>
                           <Loader2 size={16} className="animate-spin" />
-                          Procesando OCR...
+                          {t('inv.processingOCR')}
                         </>
                       ) : (
                         <>
                           <Scan size={16} />
-                          Procesar con OCR
+                          {t('inv.processOCR')}
                         </>
                       )}
                     </button>
                   )}
                 </div>
               ) : (
-                <p className="text-slate-400">Arrastra un archivo o haz clic para seleccionar</p>
+                <p className="text-slate-400">{t('new.dropFile')}</p>
               )}
             </div>
           </div>
@@ -262,14 +263,14 @@ export default function FacturaNew() {
           {/* Establecimiento */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Establecimiento
+              {t('new.establishment')}
             </label>
             <input
               type="text"
               value={formData.establecimiento}
               onChange={(e) => handleChange('establecimiento', e.target.value)}
               className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              placeholder="Nombre del establecimiento"
+              placeholder={t('new.establishmentPlaceholder')}
               required
             />
           </div>
@@ -277,7 +278,7 @@ export default function FacturaNew() {
           {/* Fecha */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Fecha
+              {t('new.date')}
             </label>
             <input
               type="date"
@@ -291,14 +292,14 @@ export default function FacturaNew() {
           {/* Concepto */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Concepto
+              {t('new.concept')}
             </label>
             <input
               type="text"
               value={formData.concepto}
               onChange={(e) => handleChange('concepto', e.target.value)}
               className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              placeholder="Descripción o concepto"
+              placeholder={t('new.conceptPlaceholder')}
             />
           </div>
 
@@ -306,7 +307,7 @@ export default function FacturaNew() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Subtotal (Base)
+                {t('new.subtotalBase')}
               </label>
               <input
                 type="number"
@@ -320,7 +321,7 @@ export default function FacturaNew() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Tasa IVA (%)
+                {t('new.vatRate')}
               </label>
               <input
                 type="number"
@@ -336,7 +337,7 @@ export default function FacturaNew() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                IVA
+                {t('new.vat')}
               </label>
               <input
                 type="number"
@@ -348,7 +349,7 @@ export default function FacturaNew() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Total
+                {t('new.total')}
               </label>
               <input
                 type="number"
@@ -366,7 +367,7 @@ export default function FacturaNew() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-2xl border border-slate-700/50 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6 border-b border-slate-700/50 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">Resultados del OCR</h2>
+                <h2 className="text-xl font-bold text-white">{t('inv.ocrResults')}</h2>
                 <button
                   type="button"
                   onClick={() => setShowOcrResults(false)}
@@ -378,7 +379,7 @@ export default function FacturaNew() {
 
               <div className="p-6 space-y-4">
                 <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <span>Confianza:</span>
+                  <span>{t('new.confidence')}</span>
                   <div className="flex-1 bg-slate-700/50 rounded-full h-2">
                     <div
                       className="bg-amber-400 h-2 rounded-full transition-all"
@@ -390,46 +391,46 @@ export default function FacturaNew() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Establecimiento</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">{t('inv.establishment')}</label>
                     <div className="px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white">
-                      {ocrResults.establishment || <span className="text-slate-500">No detectado</span>}
+                      {ocrResults.establishment || <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Fecha</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">{t('inv.date')}</label>
                     <div className="px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white">
-                      {ocrResults.date ? ocrResults.date.toLocaleDateString('es-ES') : <span className="text-slate-500">No detectado</span>}
+                      {ocrResults.date ? ocrResults.date.toLocaleDateString('es-ES') : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Subtotal</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">{t('inv.subtotal')}</label>
                     <div className="px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white">
-                      {ocrResults.subtotal != null ? `${ocrResults.subtotal.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                      {ocrResults.subtotal != null ? `${ocrResults.subtotal.toFixed(2)} €` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">IVA</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">{t('inv.vat')}</label>
                     <div className="px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white">
-                      {ocrResults.tax != null ? `${ocrResults.tax.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                      {ocrResults.tax != null ? `${ocrResults.tax.toFixed(2)} €` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Tasa IVA</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">{t('inv.vatRate')}</label>
                     <div className="px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white">
-                      {ocrResults.taxRate != null ? `${(ocrResults.taxRate * 100).toFixed(2)}%` : <span className="text-slate-500">No detectado</span>}
+                      {ocrResults.taxRate != null ? `${(ocrResults.taxRate * 100).toFixed(2)}%` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Total</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">{t('inv.total')}</label>
                     <div className="px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white font-semibold">
-                      {ocrResults.total != null ? `${ocrResults.total.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                      {ocrResults.total != null ? `${ocrResults.total.toFixed(2)} €` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                 </div>
 
                 <details className="mt-4">
                   <summary className="cursor-pointer text-sm text-slate-400 hover:text-slate-300">
-                    Ver texto extraído
+                    {t('inv.viewExtractedText')}
                   </summary>
                   <div className="mt-2 p-4 bg-slate-900/50 border border-slate-700/50 rounded-xl">
                     <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
@@ -444,7 +445,7 @@ export default function FacturaNew() {
                     onClick={() => setShowOcrResults(false)}
                     className="flex-1 px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-slate-300 font-medium hover:bg-slate-600/50 transition-colors"
                   >
-                    Cerrar
+                    {t('new.close')}
                   </button>
                   <button
                     type="button"
@@ -452,7 +453,7 @@ export default function FacturaNew() {
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:from-amber-600 hover:to-orange-600 transition-all"
                   >
                     <Check size={20} />
-                    Aplicar Datos
+                    {t('new.applyData')}
                   </button>
                 </div>
               </div>
@@ -466,7 +467,7 @@ export default function FacturaNew() {
             to="/facturas"
             className="flex-1 px-6 py-3 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 font-medium text-center hover:bg-slate-700/50 transition-colors"
           >
-            Cancelar
+            {t('inv.cancel')}
           </Link>
           <button
             type="submit"
@@ -476,12 +477,12 @@ export default function FacturaNew() {
             {saving ? (
               <>
                 <Loader2 size={20} className="animate-spin" />
-                Guardando...
+                {t('inv.saving')}
               </>
             ) : (
               <>
                 <Save size={20} />
-                Ingresar Gasto
+                {t('new.title')}
               </>
             )}
           </button>

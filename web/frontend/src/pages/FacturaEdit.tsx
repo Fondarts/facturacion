@@ -5,6 +5,7 @@ import { getFactura, updateFactura, getClientes, getEmisores, getUltimoCliente, 
 import { Factura, FacturaItem } from '../types';
 import FileViewer from '../components/FileViewer';
 import jsPDF from 'jspdf';
+import { t } from '../i18n';
 
 type Moneda = 'EUR' | 'USD' | 'GBP';
 type FormatoFecha = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD-MM-YYYY';
@@ -110,7 +111,7 @@ export default function FacturaEdit() {
 
   async function handleDeleteCliente(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (confirm('¿Eliminar este cliente?')) {
+    if (confirm(t('edit.confirmDeleteCliente'))) {
       try {
         await deleteCliente(id);
         const clientesList = await getClientes();
@@ -144,7 +145,7 @@ export default function FacturaEdit() {
 
   async function handleDeleteEmisor(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (confirm('¿Eliminar este emisor?')) {
+    if (confirm(t('edit.confirmDeleteEmisor'))) {
       try {
         await deleteEmisor(id);
         const emisoresList = await getEmisores();
@@ -411,9 +412,9 @@ export default function FacturaEdit() {
   if (!factura) {
     return (
       <div className="text-center py-12">
-        <p className="text-slate-400">Factura no encontrada</p>
+        <p className="text-slate-400">{t('edit.notFound')}</p>
         <Link to="/facturas" className="text-emerald-400 hover:underline">
-          Volver a facturas
+          {t('edit.backToInvoices')}
         </Link>
       </div>
     );
@@ -432,8 +433,8 @@ export default function FacturaEdit() {
             <ArrowLeft size={20} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Editar Factura</h1>
-            <p className="text-slate-400">Modifica los datos de tu factura</p>
+            <h1 className="text-2xl font-bold text-white">{t('edit.title')}</h1>
+            <p className="text-slate-400">{t('edit.subtitleGenerated')}</p>
           </div>
         </div>
 
@@ -443,28 +444,28 @@ export default function FacturaEdit() {
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
               <FileText size={20} className="text-amber-400" />
-              Configuración
+              {t('facturar.config')}
             </h2>
-            
+
             <div className="grid grid-cols-4 gap-4">
               {/* Número de factura */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Número de Factura
+                  {t('facturar.invoiceNumber')}
                 </label>
                 <input
                   type="text"
                   value={numeroFactura}
                   onChange={(e) => setNumeroFactura(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                  placeholder="Ej: FAC-001, INV-2024-001, etc."
+                  placeholder={t('facturar.invoiceNumberPlaceholder')}
                 />
               </div>
 
               {/* Moneda */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Moneda
+                  {t('facturar.currency')}
                 </label>
                 <select
                   value={formData.moneda}
@@ -480,7 +481,7 @@ export default function FacturaEdit() {
               {/* Formato de fecha */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Formato Fecha
+                  {t('facturar.dateFormat')}
                 </label>
                 <select
                   value={formData.formatoFecha}
@@ -497,15 +498,15 @@ export default function FacturaEdit() {
               {/* Idioma */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Idioma
+                  {t('facturar.language')}
                 </label>
                 <select
                   value={formData.idioma}
                   onChange={(e) => handleChange('idioma', e.target.value as Idioma)}
                   className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                 >
-                  <option value="es">Español</option>
-                  <option value="en">English</option>
+                  <option value="es">{t('facturar.langEs')}</option>
+                  <option value="en">{t('facturar.langEn')}</option>
                 </select>
               </div>
             </div>
@@ -513,7 +514,7 @@ export default function FacturaEdit() {
             {/* Fecha */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Fecha
+                {t('facturar.date')}
               </label>
               <input
                 type="date"
@@ -522,7 +523,7 @@ export default function FacturaEdit() {
                 className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                 required
               />
-              <span className="text-xs text-slate-400 mt-1 block">Vista previa: {formatDate(formData.fecha)}</span>
+              <span className="text-xs text-slate-400 mt-1 block">{t('facturar.datePreview', { date: formatDate(formData.fecha) })}</span>
             </div>
           </div>
 
@@ -533,7 +534,7 @@ export default function FacturaEdit() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Building2 size={20} className="text-amber-400" />
-                  From (Emisor)
+                  {t('facturar.fromTitle')}
                 </h2>
                 <div className="relative dropdown-container">
                   <button
@@ -542,13 +543,13 @@ export default function FacturaEdit() {
                     className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
                   >
                     <User size={16} />
-                    Elegir
+                    {t('facturar.choose')}
                     <ChevronDown size={16} />
                   </button>
                   {showEmisorDropdown && (
                     <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
                       {emisores.length === 0 ? (
-                        <div className="p-4 text-slate-400 text-sm">No hay emisores guardados</div>
+                        <div className="p-4 text-slate-400 text-sm">{t('facturar.noEmisores')}</div>
                       ) : (
                         emisores.map((emisor) => (
                           <div
@@ -568,7 +569,7 @@ export default function FacturaEdit() {
                                 type="button"
                                 onClick={(e) => handleDeleteEmisor(emisor.id!, e)}
                                 className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
-                                title="Eliminar emisor"
+                                title={t('facturar.deleteEmisor')}
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -585,7 +586,7 @@ export default function FacturaEdit() {
                 value={formData.from}
                 onChange={(e) => handleChange('from', e.target.value)}
                 className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
-                placeholder="Tu nombre o empresa&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: tu@email.com&#10;Teléfono: 123 456 789&#10;CIF/NIF: 12345678A"
+                placeholder={t('facturar.fromPlaceholder')}
                 rows={6}
               />
               <button
@@ -594,7 +595,7 @@ export default function FacturaEdit() {
                 disabled={!formData.from.trim()}
                 className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Guardar este emisor
+                {t('facturar.saveEmisor')}
               </button>
             </div>
 
@@ -603,7 +604,7 @@ export default function FacturaEdit() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                   <User size={20} className="text-amber-400" />
-                  Cliente
+                  {t('facturar.clientTitle')}
                 </h2>
                 <div className="relative dropdown-container">
                   <button
@@ -612,13 +613,13 @@ export default function FacturaEdit() {
                     className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
                   >
                     <User size={16} />
-                    Elegir
+                    {t('facturar.choose')}
                     <ChevronDown size={16} />
                   </button>
                   {showClienteDropdown && (
                     <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
                       {clientes.length === 0 ? (
-                        <div className="p-4 text-slate-400 text-sm">No hay clientes guardados</div>
+                        <div className="p-4 text-slate-400 text-sm">{t('facturar.noClientes')}</div>
                       ) : (
                         clientes.map((cliente) => (
                           <div
@@ -638,7 +639,7 @@ export default function FacturaEdit() {
                                 type="button"
                                 onClick={(e) => handleDeleteCliente(cliente.id!, e)}
                                 className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
-                                title="Eliminar cliente"
+                                title={t('facturar.deleteCliente')}
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -655,7 +656,7 @@ export default function FacturaEdit() {
                 value={formData.cliente}
                 onChange={(e) => handleChange('cliente', e.target.value)}
                 className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-h-32 resize-y"
-                placeholder="Nombre del cliente&#10;Dirección&#10;Ciudad, Código Postal&#10;Email: cliente@ejemplo.com&#10;Teléfono: 123 456 789"
+                placeholder={t('facturar.clientPlaceholder')}
                 required
                 rows={6}
               />
@@ -665,7 +666,7 @@ export default function FacturaEdit() {
                 disabled={!formData.cliente.trim()}
                 className="text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Guardar este cliente
+                {t('facturar.saveCliente')}
               </button>
             </div>
           </div>
@@ -673,23 +674,23 @@ export default function FacturaEdit() {
           {/* Items */}
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Conceptos</h2>
+              <h2 className="text-lg font-semibold text-white">{t('facturar.concepts')}</h2>
               <button
                 type="button"
                 onClick={addItem}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
               >
                 <Plus size={16} />
-                Añadir
+                {t('facturar.add')}
               </button>
             </div>
 
             <div className="space-y-3">
               <div className="grid grid-cols-12 gap-3 text-sm text-slate-400 px-1">
-                <div className="col-span-6">Descripción</div>
-                <div className="col-span-2 text-center">Cantidad</div>
-                <div className="col-span-2 text-center">Precio</div>
-                <div className="col-span-1 text-right">Total</div>
+                <div className="col-span-6">{t('facturar.colDescription')}</div>
+                <div className="col-span-2 text-center">{t('facturar.colQuantity')}</div>
+                <div className="col-span-2 text-center">{t('facturar.colPrice')}</div>
+                <div className="col-span-1 text-right">{t('facturar.colTotal')}</div>
                 <div className="col-span-1"></div>
               </div>
 
@@ -701,7 +702,7 @@ export default function FacturaEdit() {
                       value={item.descripcion}
                       onChange={(e) => updateItem(index, 'descripcion', e.target.value)}
                       className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                      placeholder="Descripción del item"
+                      placeholder={t('facturar.itemPlaceholder')}
                       required
                     />
                   </div>
@@ -748,7 +749,7 @@ export default function FacturaEdit() {
             <div className="flex justify-between items-center">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Tasa IVA (%)
+                  {t('facturar.vatRate')}
                 </label>
                 <input
                   type="number"
@@ -761,15 +762,15 @@ export default function FacturaEdit() {
               
               <div className="text-right space-y-2">
                 <div className="flex justify-between gap-8">
-                  <span className="text-slate-400">Subtotal:</span>
+                  <span className="text-slate-400">{t('facturar.subtotal')}</span>
                   <span className="text-white font-medium">{formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between gap-8">
-                  <span className="text-slate-400">IVA ({formData.tasa_iva}%):</span>
+                  <span className="text-slate-400">{t('facturar.vatPct', { pct: formData.tasa_iva })}</span>
                   <span className="text-white font-medium">{formatCurrency(iva)}</span>
                 </div>
                 <div className="flex justify-between gap-8 pt-2 border-t border-slate-700/50">
-                  <span className="text-white font-semibold">Total:</span>
+                  <span className="text-white font-semibold">{t('facturar.total')}</span>
                   <span className="text-2xl font-bold text-amber-400">{formatCurrency(total)}</span>
                 </div>
               </div>
@@ -782,7 +783,7 @@ export default function FacturaEdit() {
               to="/facturas"
               className="flex-1 px-6 py-3 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 font-medium text-center hover:bg-slate-700/50 transition-colors"
             >
-              Cancelar
+              {t('facturar.cancel')}
             </Link>
             <button
               type="button"
@@ -791,7 +792,7 @@ export default function FacturaEdit() {
               className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-slate-300 font-medium hover:bg-slate-600/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={20} />
-              Exportar PDF
+              {t('facturar.exportPdf')}
             </button>
             <button
               type="submit"
@@ -801,12 +802,12 @@ export default function FacturaEdit() {
               {saving ? (
                 <>
                   <Loader2 size={20} className="animate-spin" />
-                  Guardando...
+                  {t('inv.saving')}
                 </>
               ) : (
                 <>
                   <Save size={20} />
-                  Guardar Cambios
+                  {t('edit.saveChanges')}
                 </>
               )}
             </button>
@@ -828,8 +829,8 @@ export default function FacturaEdit() {
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">Editar Factura</h1>
-          <p className="text-slate-400">{factura.establecimiento || 'Sin nombre'}</p>
+          <h1 className="text-2xl font-bold text-white">{t('edit.title')}</h1>
+          <p className="text-slate-400">{factura.establecimiento || t('edit.noName')}</p>
         </div>
       </div>
 
@@ -839,21 +840,21 @@ export default function FacturaEdit() {
           {/* Establecimiento */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Establecimiento
+              {t('new.establishment')}
             </label>
             <input
               type="text"
               value={factura.establecimiento || ''}
               onChange={(e) => setFactura({ ...factura, establecimiento: e.target.value })}
               className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              placeholder="Nombre del establecimiento"
+              placeholder={t('new.establishmentPlaceholder')}
             />
           </div>
 
           {/* Fecha */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Fecha
+              {t('new.date')}
             </label>
             <input
               type="date"
@@ -866,14 +867,14 @@ export default function FacturaEdit() {
           {/* Concepto */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Concepto
+              {t('new.concept')}
             </label>
             <input
               type="text"
               value={factura.concepto || ''}
               onChange={(e) => setFactura({ ...factura, concepto: e.target.value })}
               className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              placeholder="Descripción o concepto"
+              placeholder={t('new.conceptPlaceholder')}
             />
           </div>
 
@@ -881,7 +882,7 @@ export default function FacturaEdit() {
           {(factura.fileUrl || factura.driveFileId) && (
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Archivo de Factura
+                {t('edit.fileLabel')}
               </label>
               <FileViewer fileUrl={factura.fileUrl} fileName={factura.fileName} driveFileId={factura.driveFileId} />
             </div>
@@ -891,7 +892,7 @@ export default function FacturaEdit() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Subtotal (Base)
+                {t('new.subtotalBase')}
               </label>
               <input
                 type="number"
@@ -907,7 +908,7 @@ export default function FacturaEdit() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Tasa IVA (%)
+                {t('new.vatRate')}
               </label>
               <input
                 type="number"
@@ -926,7 +927,7 @@ export default function FacturaEdit() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                IVA
+                {t('new.vat')}
               </label>
               <input
                 type="number"
@@ -941,7 +942,7 @@ export default function FacturaEdit() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Total
+                {t('new.total')}
               </label>
               <input
                 type="number"
@@ -960,7 +961,7 @@ export default function FacturaEdit() {
             to="/facturas"
             className="flex-1 px-6 py-3 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 font-medium text-center hover:bg-slate-700/50 transition-colors"
           >
-            Cancelar
+            {t('inv.cancel')}
           </Link>
           <button
             type="submit"
@@ -970,12 +971,12 @@ export default function FacturaEdit() {
             {saving ? (
               <>
                 <Loader2 size={20} className="animate-spin" />
-                Guardando...
+                {t('inv.saving')}
               </>
             ) : (
               <>
                 <Save size={20} />
-                Guardar Cambios
+                {t('edit.saveChanges')}
               </>
             )}
           </button>

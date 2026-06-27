@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Upload, Scan, X, Check, Save, Loader2, Trash2 } from 'lucide-react';
 import { createFactura } from '../api';
 import { extractInvoiceData, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
+import { t } from '../i18n';
 
 interface BatchInvoice {
   id: string;
@@ -62,7 +63,7 @@ export default function FacturaBatch() {
   async function processInvoiceOCR(invoiceId: string) {
     const invoice = invoices.find((inv) => inv.id === invoiceId);
     if (!invoice || !invoice.file.type.startsWith('image/')) {
-      alert('Solo se pueden procesar imágenes con OCR');
+      alert(t('batch.alertOnlyImages'));
       return;
     }
 
@@ -87,7 +88,7 @@ export default function FacturaBatch() {
       );
     } catch (error: any) {
       console.error('Error procesando OCR:', error);
-      const errorMessage = error?.message || 'Error al procesar la imagen. Por favor, intenta de nuevo.';
+      const errorMessage = error?.message || t('batch.alertProcessError');
       alert(errorMessage);
       setInvoices((prev) =>
         prev.map((inv) => (inv.id === invoiceId ? { ...inv, processing: false } : inv))
@@ -217,7 +218,7 @@ export default function FacturaBatch() {
       );
     } catch (error) {
       console.error('Error guardando factura:', error);
-      alert('Error al guardar la factura');
+      alert(t('batch.alertSaveError'));
       setInvoices((prev) =>
         prev.map((inv) => (inv.id === invoiceId ? { ...inv, saving: false } : inv))
       );
@@ -252,8 +253,8 @@ export default function FacturaBatch() {
           <ArrowLeft size={20} />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">Ingresar Gastos en Lote</h1>
-          <p className="text-slate-400">Procesa hasta 10 gastos a la vez</p>
+          <h1 className="text-2xl font-bold text-white">{t('batch.title')}</h1>
+          <p className="text-slate-400">{t('batch.subtitle')}</p>
         </div>
         {invoices.length > 0 && (
           <div className="flex gap-2">
@@ -266,12 +267,12 @@ export default function FacturaBatch() {
               {processingAll ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Procesando...
+                  {t('batch.processing')}
                 </>
               ) : (
                 <>
                   <Scan size={16} />
-                  Procesar Todas con OCR
+                  {t('batch.processAll')}
                 </>
               )}
             </button>
@@ -284,12 +285,12 @@ export default function FacturaBatch() {
               {savingAll ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Guardando...
+                  {t('inv.saving')}
                 </>
               ) : (
                 <>
                   <Save size={16} />
-                  Guardar Todas ({invoices.filter((inv) => inv.formData.establecimiento && inv.formData.total > 0).length})
+                  {t('batch.saveAll', { n: invoices.filter((inv) => inv.formData.establecimiento && inv.formData.total > 0).length })}
                 </>
               )}
             </button>
@@ -301,7 +302,7 @@ export default function FacturaBatch() {
       {invoices.length < 10 && (
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Seleccionar facturas (máximo 10, {invoices.length}/10 seleccionadas)
+            {t('batch.selectLabel', { n: invoices.length })}
           </label>
           <div
             className="border-2 border-dashed border-slate-700/50 rounded-xl p-8 text-center hover:border-emerald-500/50 transition-colors cursor-pointer"
@@ -317,7 +318,7 @@ export default function FacturaBatch() {
             />
             <Upload className="mx-auto text-slate-500 mb-3" size={32} />
             <p className="text-slate-400">
-              Arrastra archivos o haz clic para seleccionar (máximo 10)
+              {t('batch.dropFiles')}
             </p>
           </div>
         </div>
@@ -338,12 +339,12 @@ export default function FacturaBatch() {
                   </span>
                   {invoice.ocrResults && (
                     <span className="text-xs px-2 py-1 rounded-lg bg-amber-500/20 text-amber-400">
-                      {Math.round(invoice.ocrResults.confidence * 100)}% confianza
+                      {t('batch.confidence', { n: Math.round(invoice.ocrResults.confidence * 100) })}
                     </span>
                   )}
                   {invoice.applied && (
                     <span className="text-xs px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-400">
-                      Datos aplicados
+                      {t('batch.dataApplied')}
                     </span>
                   )}
                 </div>
@@ -357,17 +358,17 @@ export default function FacturaBatch() {
                     {invoice.processing ? (
                       <>
                         <Loader2 size={14} className="animate-spin" />
-                        Procesando...
+                        {t('batch.processing')}
                       </>
                     ) : invoice.ocrResults ? (
                       <>
                         <Check size={14} />
-                        OCR Completado
+                        {t('batch.ocrDone')}
                       </>
                     ) : (
                       <>
                         <Scan size={14} />
-                        Procesar con OCR
+                        {t('inv.processOCR')}
                       </>
                     )}
                   </button>
@@ -387,7 +388,7 @@ export default function FacturaBatch() {
               <div className="mb-4 p-4 bg-slate-900/50 rounded-xl border border-amber-500/30">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-amber-400">Resultados del OCR</span>
+                    <span className="text-sm font-medium text-amber-400">{t('inv.ocrResults')}</span>
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       <div className="flex-1 bg-slate-700/50 rounded-full h-2">
                         <div
@@ -405,51 +406,51 @@ export default function FacturaBatch() {
                       className="text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
                     >
                       <Check size={12} />
-                      Aplicar
+                      {t('batch.apply')}
                     </button>
                   )}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Establecimiento</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.establishment')}</label>
                     <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
-                      {invoice.ocrResults.establishment || <span className="text-slate-500">No detectado</span>}
+                      {invoice.ocrResults.establishment || <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Fecha</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.date')}</label>
                     <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
-                      {invoice.ocrResults.date ? invoice.ocrResults.date.toLocaleDateString('es-ES') : <span className="text-slate-500">No detectado</span>}
+                      {invoice.ocrResults.date ? invoice.ocrResults.date.toLocaleDateString('es-ES') : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Subtotal</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.subtotal')}</label>
                     <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
-                      {invoice.ocrResults.subtotal != null ? `${invoice.ocrResults.subtotal.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                      {invoice.ocrResults.subtotal != null ? `${invoice.ocrResults.subtotal.toFixed(2)} €` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">IVA</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.vat')}</label>
                     <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
-                      {invoice.ocrResults.tax != null ? `${invoice.ocrResults.tax.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                      {invoice.ocrResults.tax != null ? `${invoice.ocrResults.tax.toFixed(2)} €` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Tasa IVA</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.vatRate')}</label>
                     <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-sm">
-                      {invoice.ocrResults.taxRate != null ? `${(invoice.ocrResults.taxRate * 100).toFixed(2)}%` : <span className="text-slate-500">No detectado</span>}
+                      {invoice.ocrResults.taxRate != null ? `${(invoice.ocrResults.taxRate * 100).toFixed(2)}%` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Total</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.total')}</label>
                     <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white font-semibold text-sm">
-                      {invoice.ocrResults.total != null ? `${invoice.ocrResults.total.toFixed(2)} €` : <span className="text-slate-500">No detectado</span>}
+                      {invoice.ocrResults.total != null ? `${invoice.ocrResults.total.toFixed(2)} €` : <span className="text-slate-500">{t('inv.notDetected')}</span>}
                     </div>
                   </div>
                 </div>
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-300">
-                    Ver texto extraído
+                    {t('inv.viewExtractedText')}
                   </summary>
                   <div className="mt-2 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
                     <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
@@ -464,19 +465,19 @@ export default function FacturaBatch() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Establecimiento *
+                  {t('batch.establishmentReq')}
                 </label>
                 <input
                   type="text"
                   value={invoice.formData.establecimiento}
                   onChange={(e) => updateInvoiceField(invoice.id, 'establecimiento', e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  placeholder="Nombre"
+                  placeholder={t('batch.namePlaceholder')}
                   required
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Fecha *</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">{t('batch.dateReq')}</label>
                 <input
                   type="date"
                   value={invoice.formData.fecha}
@@ -486,7 +487,7 @@ export default function FacturaBatch() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Subtotal</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.subtotal')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -497,7 +498,7 @@ export default function FacturaBatch() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Tasa IVA (%)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">{t('new.vatRate')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -508,7 +509,7 @@ export default function FacturaBatch() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">IVA</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">{t('inv.vat')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -518,7 +519,7 @@ export default function FacturaBatch() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Total *</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">{t('batch.totalReq')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -528,13 +529,13 @@ export default function FacturaBatch() {
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-300 mb-1">Concepto</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">{t('batch.concept')}</label>
                 <input
                   type="text"
                   value={invoice.formData.concepto}
                   onChange={(e) => updateInvoiceField(invoice.id, 'concepto', e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  placeholder="Descripción"
+                  placeholder={t('batch.conceptPlaceholder')}
                 />
               </div>
             </div>
@@ -550,12 +551,12 @@ export default function FacturaBatch() {
                 {invoice.saving ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    Guardando...
+                    {t('inv.saving')}
                   </>
                 ) : (
                   <>
                     <Save size={16} />
-                    Guardar
+                    {t('batch.save')}
                   </>
                 )}
               </button>
@@ -567,7 +568,7 @@ export default function FacturaBatch() {
       {invoices.length === 0 && (
         <div className="text-center py-12 text-slate-400">
           <Upload className="mx-auto mb-4 text-slate-500" size={48} />
-          <p>Selecciona hasta 10 facturas para procesarlas en lote</p>
+          <p>{t('batch.emptyHint')}</p>
         </div>
       )}
     </div>
