@@ -201,6 +201,9 @@ const es: Dict = {
   'stats.cat.servicios': 'Servicios',
   'stats.cat.suministros': 'Suministros',
   'stats.cat.otros': 'Otros',
+  // Duplicados
+  'dup.confirm': 'Ya tenés un gasto de "{name}" del {date} con el mismo total. ¿Lo agregás igual?',
+  'dup.batch': 'Hay {n} gasto(s) que parecen ya estar cargados. ¿Los guardás igual?\n\nAceptar = guardar todos · Cancelar = omitir los repetidos',
 };
 
 const en: Dict = {
@@ -393,6 +396,9 @@ const en: Dict = {
   'stats.cat.servicios': 'Services',
   'stats.cat.suministros': 'Supplies',
   'stats.cat.otros': 'Other',
+  // Duplicates
+  'dup.confirm': 'You already have an expense from "{name}" dated {date} with the same total. Add it anyway?',
+  'dup.batch': '{n} expense(s) look already saved. Save them anyway?\n\nOK = save all · Cancel = skip duplicates',
 };
 
 const dicts: Record<string, Dict> = { es, en };

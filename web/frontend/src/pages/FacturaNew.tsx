@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, Upload, Scan, X, Check } from 'lucide-react';
-import { createFactura } from '../api';
+import { createFactura, findDuplicateRecibida } from '../api';
 import { extractInvoiceData, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
+import { formatDate } from '../settings';
 import { t } from '../i18n';
 
 export default function FacturaNew() {
@@ -28,6 +29,22 @@ export default function FacturaNew() {
     setSaving(true);
 
     try {
+      // Aviso de duplicado: mismo comercio + fecha + total ya cargado.
+      const dup = await findDuplicateRecibida({
+        establecimiento: formData.establecimiento,
+        fecha: formData.fecha,
+        total: formData.total,
+      });
+      if (dup) {
+        const ok = window.confirm(
+          t('dup.confirm', { name: dup.establecimiento || t('dash.noName'), date: formatDate(dup.fecha) })
+        );
+        if (!ok) {
+          setSaving(false);
+          return;
+        }
+      }
+
       const data = new FormData();
       data.append('establecimiento', formData.establecimiento);
       data.append('fecha', formData.fecha);

@@ -2,6 +2,7 @@ import { Factura, FacturaItem, Stats } from './types';
 import {
   readJson,
   writeJson,
+  mutateJson,
   uploadImage,
   deleteFile,
   buildImageName,
@@ -16,6 +17,28 @@ const EMISORES_FILE = 'emisores.json';
 // Generar ID único
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// ---- Detección de duplicados (gastos) ----
+function normTxt(s?: string): string {
+  return (s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+/** Huella de un gasto para comparar: comercio (normalizado) + fecha + total (en céntimos). */
+function dupKey(establecimiento?: string, fecha?: string, total?: number): string {
+  return `${normTxt(establecimiento)}|${(fecha || '').slice(0, 10)}|${Math.round((total || 0) * 100)}`;
+}
+
+/** Devuelve un gasto (recibida) ya cargado con el mismo comercio + fecha + total, o null. */
+export async function findDuplicateRecibida(data: {
+  establecimiento?: string;
+  fecha?: string;
+  total?: number;
+}): Promise<Factura | null> {
+  const facturas = await getFacturas();
+  const key = dupKey(data.establecimiento, data.fecha, data.total);
+  return (
+    facturas.find((f) => f.tipo === 'recibida' && dupKey(f.establecimiento, f.fecha, f.total) === key) || null
+  );
 }
 
 // ==================== FACTURAS ====================
@@ -93,35 +116,45 @@ export async function createFactura(data: FormData): Promise<Factura> {
     updated_at: now,
   };
 
-  const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
-  facturas.push(factura);
-  await writeJson(FACTURAS_FILE, facturas);
+  // Alta segura ante concurrencia: relee lo último y agrega (idempotente por id).
+  await mutateJson<Factura[]>(
+    FACTURAS_FILE,
+    [],
+    (arr) => (arr.some((f) => f.id === factura.id) ? arr : [...arr, factura]),
+    (after) => after.some((f) => f.id === factura.id)
+  );
 
   return factura;
 }
 
 export async function updateFactura(id: string, data: Partial<Factura>): Promise<Factura> {
-  const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
-  const index = facturas.findIndex((f) => f.id === id);
-  if (index === -1) {
+  const stamp = new Date().toISOString();
+  const after = await mutateJson<Factura[]>(
+    FACTURAS_FILE,
+    [],
+    (arr) => arr.map((f) => (f.id === id ? { ...f, ...data, updated_at: stamp } : f)),
+    (arr) => {
+      const f = arr.find((x) => x.id === id);
+      return !!f && f.updated_at === stamp;
+    }
+  );
+  const updated = after.find((f) => f.id === id);
+  if (!updated) {
     throw new Error('Factura no encontrada');
   }
-
-  facturas[index] = {
-    ...facturas[index],
-    ...data,
-    updated_at: new Date().toISOString(),
-  };
-
-  await writeJson(FACTURAS_FILE, facturas);
-  return facturas[index];
+  return updated;
 }
 
 export async function deleteFactura(id: string): Promise<void> {
   const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
   const target = facturas.find((f) => f.id === id);
-  const filtered = facturas.filter((f) => f.id !== id);
-  await writeJson(FACTURAS_FILE, filtered);
+
+  await mutateJson<Factura[]>(
+    FACTURAS_FILE,
+    [],
+    (arr) => arr.filter((f) => f.id !== id),
+    (after) => !after.some((f) => f.id === id)
+  );
 
   // Borrar la imagen asociada en Drive (best-effort)
   if (target?.driveFileId) {

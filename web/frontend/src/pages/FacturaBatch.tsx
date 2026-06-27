@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Upload, Scan, X, Check, Save, Loader2, Trash2 } from 'lucide-react';
-import { createFactura } from '../api';
+import { createFactura, findDuplicateRecibida } from '../api';
 import { extractInvoiceData, initializeOCR, terminateOCR, ExtractedInvoiceData } from '../services/ocrService';
+import { formatDate } from '../settings';
 import { t } from '../i18n';
 
 interface BatchInvoice {
@@ -191,9 +192,23 @@ export default function FacturaBatch() {
     );
   }
 
-  async function saveInvoice(invoiceId: string) {
+  async function saveInvoice(invoiceId: string, skipDupCheck = false) {
     const invoice = invoices.find((inv) => inv.id === invoiceId);
     if (!invoice) return;
+
+    if (!skipDupCheck) {
+      const dup = await findDuplicateRecibida({
+        establecimiento: invoice.formData.establecimiento,
+        fecha: invoice.formData.fecha,
+        total: invoice.formData.total,
+      });
+      if (
+        dup &&
+        !window.confirm(t('dup.confirm', { name: dup.establecimiento || t('dash.noName'), date: formatDate(dup.fecha) }))
+      ) {
+        return; // el usuario decidió no guardarlo
+      }
+    }
 
     setInvoices((prev) =>
       prev.map((inv) => (inv.id === invoiceId ? { ...inv, saving: true } : inv))
@@ -233,8 +248,25 @@ export default function FacturaBatch() {
       (inv) => inv.formData.establecimiento && inv.formData.total > 0
     );
 
-    for (const invoice of validInvoices) {
-      await saveInvoice(invoice.id);
+    // Detectar duplicados de una sola vez (una única confirmación para todo el lote).
+    const dupChecks = await Promise.all(
+      validInvoices.map((inv) =>
+        findDuplicateRecibida({
+          establecimiento: inv.formData.establecimiento,
+          fecha: inv.formData.fecha,
+          total: inv.formData.total,
+        })
+      )
+    );
+    const dupIds = new Set(validInvoices.filter((_, i) => dupChecks[i]).map((inv) => inv.id));
+    let toSave = validInvoices;
+    if (dupIds.size > 0) {
+      const keepAll = window.confirm(t('dup.batch', { n: dupIds.size }));
+      if (!keepAll) toSave = validInvoices.filter((inv) => !dupIds.has(inv.id));
+    }
+
+    for (const invoice of toSave) {
+      await saveInvoice(invoice.id, true); // ya chequeado arriba
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
 

@@ -160,6 +160,36 @@ export async function writeJson(name: string, obj: unknown): Promise<void> {
   if (!res.ok) throw new Error(`Drive (crear JSON) error ${res.status}`);
 }
 
+/**
+ * Mutación segura ante escrituras concurrentes (web y Android comparten el mismo JSON
+ * en Drive). Lee lo último, aplica `mutator`, escribe y RELEE para verificar que el
+ * cambio quedó; si otra escritura lo pisó (verify=false), reintenta con el estado fresco.
+ *
+ * IMPORTANTE: `mutator` debe ser idempotente (operar por id), porque puede ejecutarse
+ * varias veces. Devuelve el contenido final leído de Drive.
+ */
+export async function mutateJson<T>(
+  name: string,
+  fallback: T,
+  mutator: (current: T) => T,
+  verify: (afterWrite: T) => boolean,
+  retries = 4
+): Promise<T> {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const current = await readJson<T>(name, fallback);
+    await writeJson(name, mutator(current));
+    const after = await readJson<T>(name, fallback);
+    if (verify(after)) return after;
+    if (attempt++ >= retries) {
+      console.warn(`mutateJson(${name}): no se pudo confirmar el cambio tras ${attempt} intentos (posible escritura concurrente).`);
+      return after;
+    }
+    await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 250)));
+  }
+}
+
 /** Sube una imagen/PDF a la carpeta principal y devuelve su fileId. */
 export async function uploadImage(file: File, niceName: string, fecha?: string): Promise<string> {
   const parent = await resolveUploadFolder(fecha);

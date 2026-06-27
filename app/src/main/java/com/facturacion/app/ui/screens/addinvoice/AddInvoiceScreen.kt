@@ -71,6 +71,8 @@ fun AddInvoiceScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var pendingCameraFile by remember { mutableStateOf<File?>(null) }
     var pendingInvoice by remember { mutableStateOf<Invoice?>(null) }
+    var duplicateOf by remember { mutableStateOf<Invoice?>(null) } // gasto existente que parece duplicado
+    var pendingSave by remember { mutableStateOf<Invoice?>(null) } // el que se quiere guardar, en espera de confirmar
 
     DisposableEffect(Unit) { onDispose { ocrService.release() } }
 
@@ -164,6 +166,28 @@ fun AddInvoiceScreen(
         }
     }
 
+    // Guarda el gasto (local + Drive). Se llama directo o tras confirmar un duplicado.
+    fun performSave(invoice: Invoice) {
+        scope.launch {
+            isSaving = true
+            try {
+                invoiceRepository.insertInvoice(invoice)
+            } catch (e: Exception) {
+                error = "Error al guardar: ${e.message}"
+                isSaving = false
+                return@launch
+            }
+            if (GoogleDriveAuth.hasAccess(context)) {
+                uploadToDrive(invoice)
+                onNavigateBack()
+            } else {
+                pendingInvoice = invoice
+                isSaving = false
+                signInLauncher.launch(GoogleDriveAuth.client(context).signInIntent)
+            }
+        }
+    }
+
     val launchCamera: () -> Unit = {
         val file = createInvoiceFile(context)
         pendingCameraFile = file
@@ -243,22 +267,13 @@ fun AddInvoiceScreen(
                         categoryRepository = categoryRepository,
                         onSave = { invoice ->
                             scope.launch {
-                                isSaving = true
-                                try {
-                                    invoiceRepository.insertInvoice(invoice)
-                                } catch (e: Exception) {
-                                    error = "Error al guardar: ${e.message}"
-                                    isSaving = false
-                                    return@launch
-                                }
-                                if (GoogleDriveAuth.hasAccess(context)) {
-                                    uploadToDrive(invoice)
-                                    onNavigateBack()
+                                // Aviso de duplicado: mismo comercio + fecha + total ya cargado.
+                                val dup = withContext(Dispatchers.IO) { invoiceRepository.getDuplicateInvoice(invoice) }
+                                if (dup != null) {
+                                    duplicateOf = dup
+                                    pendingSave = invoice
                                 } else {
-                                    // Necesita login: lo dispara y al volver sube a Drive
-                                    pendingInvoice = invoice
-                                    isSaving = false
-                                    signInLauncher.launch(GoogleDriveAuth.client(context).signInIntent)
+                                    performSave(invoice)
                                 }
                             }
                         },
@@ -267,5 +282,28 @@ fun AddInvoiceScreen(
                 }
             }
         }
+    }
+
+    if (duplicateOf != null) {
+        val existing = duplicateOf!!
+        val df = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        AlertDialog(
+            onDismissRequest = { duplicateOf = null; pendingSave = null },
+            title = { Text("Posible duplicado") },
+            text = {
+                Text("Ya tenés un gasto de \"${existing.establishment}\" del ${df.format(existing.date)} con el mismo total. ¿Lo agregás igual?")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val inv = pendingSave
+                    duplicateOf = null
+                    pendingSave = null
+                    if (inv != null) performSave(inv)
+                }) { Text("Agregar igual") }
+            },
+            dismissButton = {
+                TextButton(onClick = { duplicateOf = null; pendingSave = null }) { Text("Cancelar") }
+            }
+        )
     }
 }

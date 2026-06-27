@@ -104,21 +104,21 @@ class DriveService(private val accessToken: String) {
         }
     }
 
-    private fun appendFactura(dataFolderId: String, factura: Map<String, Any?>) {
-        val existingId = findOne("name='facturas.json' and '$dataFolderId' in parents and trashed=false")
-        val arr: JsonArray = if (existingId != null) {
-            client.newCall(bearer(Request.Builder().url("$FILES/$existingId?alt=media")).get().build()).execute().use { r ->
-                val s = r.body?.string() ?: "[]"
-                if (r.isSuccessful) {
-                    val parsed = JsonParser.parseString(s)
-                    if (parsed.isJsonArray) parsed.asJsonArray else JsonArray()
-                } else JsonArray()
-            }
-        } else JsonArray()
-        arr.add(gson.toJsonTree(factura))
+    private fun readFacturasArray(fileId: String?): JsonArray {
+        if (fileId == null) return JsonArray()
+        return client.newCall(bearer(Request.Builder().url("$FILES/$fileId?alt=media")).get().build()).execute().use { r ->
+            val s = r.body?.string() ?: "[]"
+            if (r.isSuccessful) {
+                val parsed = JsonParser.parseString(s)
+                if (parsed.isJsonArray) parsed.asJsonArray else JsonArray()
+            } else JsonArray()
+        }
+    }
+
+    private fun writeFacturasArray(fileId: String?, dataFolderId: String, arr: JsonArray) {
         val content = prettyGson.toJson(arr)
-        if (existingId != null) {
-            val req = bearer(Request.Builder().url("$UPLOAD/$existingId?uploadType=media"))
+        if (fileId != null) {
+            val req = bearer(Request.Builder().url("$UPLOAD/$fileId?uploadType=media"))
                 .patch(content.toRequestBody(JSON.toMediaType())).build()
             client.newCall(req).execute().use { r ->
                 if (!r.isSuccessful) throw RuntimeException("Drive actualizar json ${r.code}")
@@ -126,6 +126,34 @@ class DriveService(private val accessToken: String) {
         } else {
             val meta = gson.toJson(mapOf("name" to "facturas.json", "parents" to listOf(dataFolderId), "mimeType" to JSON))
             multipartUpload(meta, JSON, content.toByteArray(Charsets.UTF_8))
+        }
+    }
+
+    private fun arrayHasId(arr: JsonArray, id: String): Boolean =
+        arr.any { it.isJsonObject && it.asJsonObject.get("id")?.let { e -> e.isJsonPrimitive && e.asString == id } == true }
+
+    /**
+     * Agrega la factura a facturas.json de forma segura ante escrituras concurrentes
+     * (web y Android comparten el archivo): relee lo último, agrega (idempotente por id),
+     * escribe y RELEE para verificar; si otra escritura lo pisó, reintenta con jitter.
+     */
+    private fun appendFactura(dataFolderId: String, factura: Map<String, Any?>) {
+        val newId = factura["id"]?.toString()
+        val query = "name='facturas.json' and '$dataFolderId' in parents and trashed=false"
+        var attempt = 0
+        while (true) {
+            val fileId = findOne(query)
+            val arr = readFacturasArray(fileId)
+            if (newId == null || !arrayHasId(arr, newId)) arr.add(gson.toJsonTree(factura))
+            writeFacturasArray(fileId, dataFolderId, arr)
+            if (newId == null) return
+            // Verificar que nuestro registro quedó (si lo pisaron, reintentar con estado fresco).
+            if (arrayHasId(readFacturasArray(findOne(query)), newId)) return
+            if (attempt++ >= 4) {
+                Log.w(TAG, "appendFactura: no se pudo confirmar el alta tras $attempt intentos (posible escritura concurrente)")
+                return
+            }
+            Thread.sleep(150L + (Math.random() * 250).toLong())
         }
     }
 
