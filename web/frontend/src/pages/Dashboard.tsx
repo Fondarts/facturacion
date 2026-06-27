@@ -9,6 +9,7 @@ import { t } from '../i18n';
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentFacturas, setRecentFacturas] = useState<Factura[]>([]);
+  const [recentGeneradas, setRecentGeneradas] = useState<Factura[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,7 +20,8 @@ export default function Dashboard() {
           getFacturas()
         ]);
         setStats(statsData);
-        setRecentFacturas(facturasData.slice(0, 5));
+        setRecentFacturas(facturasData.filter((f) => f.tipo === 'recibida').slice(0, 5));
+        setRecentGeneradas(facturasData.filter((f) => f.tipo === 'generada').slice(0, 5));
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -98,7 +100,7 @@ export default function Dashboard() {
       </div>
 
       {/* Gastos recientes + Gastos por mes, lado a lado a la misma altura */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
       <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm overflow-hidden flex flex-col">
         <div className="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">{t('dash.recent')}</h2>
@@ -174,6 +176,46 @@ export default function Dashboard() {
           </div>
           ) : (
             <p className="text-slate-500 text-sm">Sin datos todavía</p>
+          )}
+        </div>
+
+        {/* Facturas generadas recientes (tercera columna) */}
+        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm overflow-hidden flex flex-col">
+          <div className="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">{t('dash.generated')}</h2>
+            <Link to="/facturar" className="text-amber-400 hover:text-amber-300 flex items-center gap-1 text-sm">
+              {t('nav.invoice')} <ArrowRight size={16} />
+            </Link>
+          </div>
+          {recentGeneradas.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <FileText className="mx-auto text-slate-600 mb-4" size={48} />
+              <p className="text-slate-400">{t('dash.generatedEmpty')}</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-700/50">
+              {recentGeneradas.map((factura) => (
+                <Link
+                  key={factura.id}
+                  to={`/facturas/${factura.id}`}
+                  className="flex items-center justify-between px-6 py-4 hover:bg-slate-800/30 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-amber-500/20 text-amber-400">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">{factura.cliente || factura.establecimiento || t('dash.noName')}</p>
+                      <p className="text-sm text-slate-400">{formatDate(factura.fecha)}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-white">{formatCurrency(factura.total)}</p>
+                    <p className="text-sm text-slate-400">IVA: {formatCurrency(factura.iva)}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           )}
         </div>
       </div>
