@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,10 +9,11 @@ plugins {
 
 // Token para autorizar las llamadas al OCR serverless. Se lee de local.properties
 // (NO se commitea). Debe coincidir con OCR_APP_TOKEN en las env vars de Vercel.
-val ocrAppToken: String = java.util.Properties().run {
+val ocrAppToken: String = run {
+    val props = Properties()
     val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-    getProperty("OCR_TOKEN") ?: ""
+    if (f.exists()) f.inputStream().use { props.load(it) }
+    props.getProperty("OCR_TOKEN") ?: ""
 }
 
 android {
