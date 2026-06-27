@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -21,14 +22,22 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.facturacion.app.data.repositories.CategoryRepository
 import com.facturacion.app.data.repositories.InvoiceRepository
+import com.facturacion.app.domain.models.Invoice
+import com.facturacion.app.services.drive.DriveService
+import com.facturacion.app.services.drive.GoogleDriveAuth
 import com.facturacion.app.services.ocr.ExtractedInvoiceData
 import com.facturacion.app.services.ocr.ImageProcessor
 import com.facturacion.app.services.ocr.OcrService
 import com.facturacion.app.ui.components.InvoiceForm
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private fun createInvoiceFile(context: Context): File {
     val dir = File(context.getExternalFilesDir(null), "invoices").apply { mkdirs() }
@@ -58,11 +67,42 @@ fun AddInvoiceScreen(
     var imagePath by remember { mutableStateOf<String?>(null) }
     var extractedData by remember { mutableStateOf<ExtractedInvoiceData?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var pendingCameraFile by remember { mutableStateOf<File?>(null) }
+    var pendingInvoice by remember { mutableStateOf<Invoice?>(null) }
 
-    DisposableEffect(Unit) {
-        onDispose { ocrService.release() }
+    DisposableEffect(Unit) { onDispose { ocrService.release() } }
+
+    // Sube la imagen a Drive y la agrega a facturas.json (best-effort: no rompe el guardado local).
+    suspend fun uploadToDrive(invoice: Invoice) {
+        try {
+            val token = GoogleDriveAuth.getAccessToken(context)
+            val fecha = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(invoice.date)
+            val safe = invoice.establishment.replace(Regex("[\\\\/:*?\"<>|]+"), " ").trim().ifEmpty { "ticket" }
+            val niceName = "$fecha $safe".take(80) + ".jpg"
+            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+            val factura: Map<String, Any?> = mapOf(
+                "id" to "android-${System.currentTimeMillis()}",
+                "establecimiento" to invoice.establishment,
+                "fecha" to fecha,
+                "total" to invoice.total,
+                "subtotal" to invoice.subtotal,
+                "iva" to invoice.tax,
+                "tasa_iva" to invoice.taxRate,
+                "concepto" to (invoice.notes ?: ""),
+                "fileName" to invoice.fileName,
+                "tipo" to "recibida",
+                "created_at" to now,
+                "updated_at" to now
+            )
+            withContext(Dispatchers.IO) {
+                DriveService(token).uploadInvoice(File(invoice.filePath), fecha, niceName, factura)
+            }
+        } catch (e: Exception) {
+            Log.w("AddInvoiceScreen", "Drive falló: ${e.message}", e)
+            error = "El gasto se guardó en el teléfono, pero falló la subida a Drive: ${e.message}"
+        }
     }
 
     fun processPath(path: String) {
@@ -78,7 +118,7 @@ fun AddInvoiceScreen(
                 extractedData = data
             } catch (e: Exception) {
                 error = "OCR falló: ${e.message}. Podés cargar los datos a mano."
-                extractedData = null // el formulario igual se muestra para carga manual
+                extractedData = null
             } finally {
                 isProcessing = false
             }
@@ -100,6 +140,25 @@ fun AddInvoiceScreen(
                 } catch (e: Exception) {
                     error = "No se pudo abrir la imagen: ${e.message}"
                     isProcessing = false
+                }
+            }
+        }
+    }
+
+    // Resultado del login de Google: si OK, sube el gasto pendiente a Drive.
+    val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val pending = pendingInvoice
+        pendingInvoice = null
+        if (pending != null) {
+            scope.launch {
+                isSaving = true
+                try {
+                    GoogleSignIn.getSignedInAccountFromIntent(result.data).getResult(ApiException::class.java)
+                    uploadToDrive(pending)
+                } catch (e: Exception) {
+                    error = "No se pudo conectar Drive: ${e.message}. El gasto quedó guardado en el teléfono."
+                } finally {
+                    onNavigateBack()
                 }
             }
         }
@@ -140,32 +199,24 @@ fun AddInvoiceScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             error?.let {
-                Text(
-                    it,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(16.dp)
-                )
+                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
             }
 
             when {
-                isProcessing -> {
+                isProcessing || isSaving -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(48.dp),
+                        modifier = Modifier.fillMaxWidth().padding(48.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         CircularProgressIndicator()
-                        Text("Reconociendo el ticket…")
+                        Text(if (isSaving) "Guardando y subiendo a Drive…" else "Reconociendo el ticket…")
                     }
                 }
 
                 imagePath == null -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
@@ -192,11 +243,22 @@ fun AddInvoiceScreen(
                         categoryRepository = categoryRepository,
                         onSave = { invoice ->
                             scope.launch {
+                                isSaving = true
                                 try {
                                     invoiceRepository.insertInvoice(invoice)
-                                    onNavigateBack()
                                 } catch (e: Exception) {
                                     error = "Error al guardar: ${e.message}"
+                                    isSaving = false
+                                    return@launch
+                                }
+                                if (GoogleDriveAuth.hasAccess(context)) {
+                                    uploadToDrive(invoice)
+                                    onNavigateBack()
+                                } else {
+                                    // Necesita login: lo dispara y al volver sube a Drive
+                                    pendingInvoice = invoice
+                                    isSaving = false
+                                    signInLauncher.launch(GoogleDriveAuth.client(context).signInIntent)
                                 }
                             }
                         },

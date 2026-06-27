@@ -157,6 +157,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
+
+    // Google Sign-In (para subir tickets a Google Drive)
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     
     // Testing
     testImplementation("junit:junit:4.13.2")
