@@ -61,6 +61,23 @@ export default function FacturaBatch() {
     e.target.value = ''; // Reset input
   }
 
+  // Convierte el resultado del OCR en los campos del formulario del lote.
+  function ocrToFormUpdates(ocr: ExtractedInvoiceData) {
+    const updates: Partial<BatchInvoice['formData']> = {};
+    if (ocr.establishment) updates.establecimiento = ocr.establishment;
+    if (ocr.date) updates.fecha = ocr.date.toISOString().split('T')[0];
+    if (ocr.subtotal != null) updates.subtotal = ocr.subtotal;
+    if (ocr.taxRate != null) updates.tasa_iva = ocr.taxRate * 100;
+    if (ocr.tax != null) updates.iva = ocr.tax;
+    if (ocr.total != null) updates.total = ocr.total;
+    if (updates.subtotal != null && updates.tasa_iva != null) {
+      const iva = updates.subtotal * (updates.tasa_iva / 100);
+      updates.iva = iva;
+      updates.total = updates.subtotal + iva;
+    }
+    return updates;
+  }
+
   async function processInvoiceOCR(invoiceId: string) {
     const invoice = invoices.find((inv) => inv.id === invoiceId);
     const supported = !!invoice && (invoice.file.type.startsWith('image/') || invoice.file.type === 'application/pdf');
@@ -77,12 +94,15 @@ export default function FacturaBatch() {
       await initializeOCR();
       const extractedData = await extractInvoiceData(invoice.file);
 
+      // Auto-aplicar al formulario: que los campos se llenen solos tras el OCR.
       setInvoices((prev) =>
         prev.map((inv) =>
           inv.id === invoiceId
             ? {
                 ...inv,
                 ocrResults: extractedData,
+                formData: { ...inv.formData, ...ocrToFormUpdates(extractedData) },
+                applied: true,
                 processing: false,
               }
             : inv
@@ -119,49 +139,11 @@ export default function FacturaBatch() {
   function applyOcrResults(invoiceId: string) {
     const invoice = invoices.find((inv) => inv.id === invoiceId);
     if (!invoice || !invoice.ocrResults) return;
-
-    const updates: any = {};
-
-    if (invoice.ocrResults.establishment) {
-      updates.establecimiento = invoice.ocrResults.establishment;
-    }
-
-    if (invoice.ocrResults.date) {
-      updates.fecha = invoice.ocrResults.date.toISOString().split('T')[0];
-    }
-
-    if (invoice.ocrResults.subtotal != null) {
-      updates.subtotal = invoice.ocrResults.subtotal;
-    }
-
-    if (invoice.ocrResults.taxRate != null) {
-      updates.tasa_iva = invoice.ocrResults.taxRate * 100;
-    }
-
-    if (invoice.ocrResults.tax != null) {
-      updates.iva = invoice.ocrResults.tax;
-    }
-
-    if (invoice.ocrResults.total != null) {
-      updates.total = invoice.ocrResults.total;
-    }
-
-    // Recalcular si tenemos subtotal y tasa
-    if (updates.subtotal != null && updates.tasa_iva != null) {
-      const iva = updates.subtotal * (updates.tasa_iva / 100);
-      const total = updates.subtotal + iva;
-      updates.iva = iva;
-      updates.total = total;
-    }
-
+    const updates = ocrToFormUpdates(invoice.ocrResults);
     setInvoices((prev) =>
       prev.map((inv) =>
         inv.id === invoiceId
-          ? {
-              ...inv,
-              formData: { ...inv.formData, ...updates },
-              applied: true,
-            }
+          ? { ...inv, formData: { ...inv.formData, ...updates }, applied: true }
           : inv
       )
     );
