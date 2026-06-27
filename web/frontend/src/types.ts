@@ -7,6 +7,7 @@ export interface Factura {
   iva: number;
   tasa_iva: number;
   concepto?: string;
+  categoria?: string; // Categoría del gasto (Comida, Transporte, ...). Forward-compatible; hoy se deriva de concepto.
   archivo?: string;
   fileUrl?: string; // URL pública del archivo (legado / Firebase Storage)
   fileName?: string;

@@ -9,6 +9,7 @@ import FacturaNew from './pages/FacturaNew';
 import FacturaBatch from './pages/FacturaBatch';
 import Facturar from './pages/Facturar';
 import Dashboard from './pages/Dashboard';
+import Stats from './pages/Stats';
 import Settings from './pages/Settings';
 import { t } from './i18n';
 
@@ -110,7 +111,7 @@ export default function App() {
                     <Route path="/facturar" element={<Facturar />} />
                     <Route path="/generadas" element={<FacturasList lockedTipo="generada" />} />
                     <Route path="/settings" element={<Settings />} />
-                    <Route path="/stats" element={<Dashboard />} />
+                    <Route path="/stats" element={<Stats />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>
