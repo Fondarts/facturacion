@@ -10,6 +10,7 @@ import FacturaBatch from './pages/FacturaBatch';
 import Facturar from './pages/Facturar';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
+import { t } from './i18n';
 
 function NavLink({ to, children, icon: Icon }: { to: string; children: React.ReactNode; icon: React.ElementType }) {
   const location = useLocation();
@@ -47,15 +48,15 @@ function Layout({ children }: { children: React.ReactNode }) {
             </Link>
             
             <nav className="flex items-center gap-2">
-              <NavLink to="/" icon={Home}>Inicio</NavLink>
-              <NavLink to="/facturas" icon={FileText}>Gastos</NavLink>
-              <NavLink to="/stats" icon={BarChart3}>Estadísticas</NavLink>
+              <NavLink to="/" icon={Home}>{t('nav.home')}</NavLink>
+              <NavLink to="/facturas" icon={FileText}>{t('nav.expenses')}</NavLink>
+              <NavLink to="/stats" icon={BarChart3}>{t('nav.stats')}</NavLink>
               <Link
                 to="/facturar"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
               >
                 <Plus size={18} />
-                Facturar
+                {t('nav.invoice')}
               </Link>
               
               {/* Usuario y logout */}
@@ -67,14 +68,14 @@ function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   to="/settings"
                   className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200"
-                  title="Ajustes"
+                  title={t('nav.settings')}
                 >
                   <SettingsIcon size={18} />
                 </Link>
                 <button
                   onClick={logout}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
-                  title="Cerrar sesión"
+                  title={t('nav.signout')}
                 >
                   <LogOut size={18} />
                 </button>

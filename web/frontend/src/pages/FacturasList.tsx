@@ -4,6 +4,7 @@ import { FileText, Plus, Search, Trash2, Edit, Calendar, ChevronDown, ChevronRig
 import { getFacturas, deleteFactura } from '../api';
 import { Factura, FacturaItem } from '../types';
 import FileViewer from '../components/FileViewer';
+import { t } from '../i18n';
 import jsPDF from 'jspdf';
 
 interface MonthGroup {
@@ -330,8 +331,8 @@ export default function FacturasList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Gastos</h1>
-          <p className="text-slate-400">{facturas.length} gastos registrados</p>
+          <h1 className="text-3xl font-bold text-white mb-2">{t('list.title')}</h1>
+          <p className="text-slate-400">{t('list.count', { n: facturas.length })}</p>
         </div>
         <div className="flex gap-3">
           <Link
@@ -339,14 +340,14 @@ export default function FacturasList() {
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium hover:bg-amber-500/30 transition-all duration-200"
           >
             <Upload size={20} />
-            Ingresar en Lote
+            {t('list.batch')}
           </Link>
           <Link
             to="/facturas/nueva"
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-lg shadow-emerald-500/20"
           >
             <Plus size={20} />
-            Ingresar Gasto
+            {t('dash.addExpense')}
           </Link>
         </div>
       </div>
@@ -357,7 +358,7 @@ export default function FacturasList() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
             type="text"
-            placeholder="Buscar por establecimiento o concepto..."
+            placeholder={t('list.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50"
@@ -373,7 +374,7 @@ export default function FacturasList() {
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Todas
+            {t('list.filterAll')}
           </button>
           <button
             onClick={() => setFilter('recibida')}
@@ -383,7 +384,7 @@ export default function FacturasList() {
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Recibidas
+            {t('list.filterReceived')}
           </button>
           <button
             onClick={() => setFilter('generada')}
@@ -393,7 +394,7 @@ export default function FacturasList() {
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Generadas
+            {t('list.filterIssued')}
           </button>
         </div>
       </div>
@@ -403,14 +404,14 @@ export default function FacturasList() {
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-12 border border-slate-700/50 text-center">
           <FileText className="mx-auto text-slate-600 mb-4" size={48} />
           <p className="text-slate-400 mb-4">
-            {search || filter !== 'todas' ? 'No se encontraron gastos' : 'No hay gastos todavía'}
+            {search || filter !== 'todas' ? t('list.emptyFiltered') : t('list.empty')}
           </p>
           <Link
             to="/facturas/nueva"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
           >
             <Plus size={18} />
-            Añadir primer gasto
+            {t('dash.addFirst')}
           </Link>
         </div>
       ) : (

@@ -5,6 +5,7 @@ import {
   uploadImage,
   deleteFile,
   buildImageName,
+  moveToDateFolder,
 } from './services/driveStorage';
 
 // Nombres de los archivos de datos dentro de la subcarpeta _datos de Drive
@@ -130,6 +131,28 @@ export async function deleteFactura(id: string): Promise<void> {
       console.warn('No se pudo borrar la imagen en Drive:', e);
     }
   }
+}
+
+/**
+ * Reubica las imágenes ya existentes en Drive dentro de carpetas AÑO/MES según
+ * la fecha de cada gasto. Útil para ordenar las que se subieron antes de ese cambio.
+ */
+export async function reorganizeImages(
+  onProgress?: (done: number, total: number) => void
+): Promise<{ moved: number; total: number }> {
+  const facturas = await readJson<Factura[]>(FACTURAS_FILE, []);
+  const withFiles = facturas.filter((f) => f.driveFileId);
+  let moved = 0;
+  for (let i = 0; i < withFiles.length; i++) {
+    const f = withFiles[i];
+    try {
+      if (await moveToDateFolder(f.driveFileId!, f.fecha)) moved++;
+    } catch (e) {
+      console.warn('No se pudo reubicar la imagen de', f.id, e);
+    }
+    onProgress?.(i + 1, withFiles.length);
+  }
+  return { moved, total: withFiles.length };
 }
 
 export async function getStats(): Promise<Stats> {

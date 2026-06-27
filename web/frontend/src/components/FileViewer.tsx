@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Image, X, ExternalLink } from 'lucide-react';
 import { getFileObjectUrl } from '../services/driveStorage';
+import { t } from '../i18n';
 
 interface FileViewerProps {
   fileUrl?: string;
@@ -50,7 +51,7 @@ export default function FileViewer({ fileUrl, fileName, driveFileId }: FileViewe
         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
       >
         {isPdf ? <FileText size={18} /> : <Image size={18} />}
-        Ver {isPdf ? 'PDF' : 'archivo'}
+        {isPdf ? t('viewer.viewPdf') : t('viewer.viewFile')}
       </button>
 
       {isOpen && (

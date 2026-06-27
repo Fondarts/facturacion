@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { FileText, AlertCircle } from 'lucide-react';
+import { t } from '../i18n';
 
 export default function Login() {
   const [error, setError] = useState('');
@@ -24,10 +25,10 @@ export default function Login() {
       if (success) {
         navigate('/');
       } else {
-        setError('No se pudo iniciar sesión con Google. Intentá nuevamente.');
+        setError(t('login.error'));
       }
     } catch (err) {
-      setError('Error al iniciar sesión. Intentá nuevamente.');
+      setError(t('login.error'));
     } finally {
       setIsLoading(false);
     }
@@ -50,7 +51,7 @@ export default function Login() {
             <FileText className="text-white" size={32} />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Facturación</h1>
-          <p className="text-slate-400">Iniciá sesión con tu cuenta de Google</p>
+          <p className="text-slate-400">{t('login.subtitle')}</p>
         </div>
 
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm p-8 shadow-xl">
@@ -69,7 +70,7 @@ export default function Login() {
             {isLoading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-slate-700"></div>
-                <span>Conectando…</span>
+                <span>{t('login.connecting')}</span>
               </>
             ) : (
               <>
@@ -79,17 +80,13 @@ export default function Login() {
                   <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z" />
                   <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
                 </svg>
-                <span>Continuar con Google</span>
+                <span>{t('login.continue')}</span>
               </>
             )}
           </button>
 
           <div className="mt-6 p-4 rounded-lg bg-slate-800/30 border border-slate-700/30">
-            <p className="text-xs text-slate-400 text-center">
-              Tus tickets se guardan en una carpeta de tu Google Drive
-              (<span className="text-emerald-400">Facturación - Tickets</span>).
-              La app solo accede a los archivos que crea.
-            </p>
+            <p className="text-xs text-slate-400 text-center">{t('login.note')}</p>
           </div>
         </div>
       </div>

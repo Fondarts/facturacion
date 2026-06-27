@@ -192,6 +192,30 @@ export async function deleteFile(fileId: string): Promise<void> {
   if (!res.ok && res.status !== 404) throw new Error(`Drive (borrar) error ${res.status}`);
 }
 
+async function getFileParents(fileId: string): Promise<string[]> {
+  const res = await fetch(`${FILES_URL}/${fileId}?fields=parents`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`Drive (parents) error ${res.status}`);
+  const data = await res.json();
+  return data.parents || [];
+}
+
+/**
+ * Mueve un archivo a la carpeta AÑO/MES que corresponde a `fecha` si no está ya ahí.
+ * Devuelve true si lo movió, false si ya estaba bien ubicado.
+ */
+export async function moveToDateFolder(fileId: string, fecha: string): Promise<boolean> {
+  const target = await resolveUploadFolder(fecha);
+  const parents = await getFileParents(fileId);
+  if (parents.includes(target)) return false;
+  const removeParents = parents.join(',');
+  const res = await fetch(
+    `${FILES_URL}/${fileId}?addParents=${target}&removeParents=${encodeURIComponent(removeParents)}&fields=id`,
+    { method: 'PATCH', headers: await authHeaders() }
+  );
+  if (!res.ok) throw new Error(`Drive (mover) error ${res.status}`);
+  return true;
+}
+
 /** Nombre legible para la imagen en Drive: "YYYY-MM-DD establecimiento.ext". */
 export function buildImageName(establecimiento: string, fecha: string, original: string): string {
   const ext = (original.match(/\.[a-z0-9]+$/i) || ['.jpg'])[0];
