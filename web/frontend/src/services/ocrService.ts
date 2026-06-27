@@ -495,12 +495,10 @@ export async function extractInvoiceData(imageFile: File, onProgress?: (progress
   try {
     if (OCR_SERVICE === 'gemini' || OCR_SERVICE === 'paddleocr') {
       let fileToProcess = imageFile;
-      // Convertimos el PDF a imagen (1ª página) antes de enviarlo. Los PDF de Adobe Scan
-      // pueden pesar varios MB y superar el límite de tamaño del endpoint serverless de
-      // Vercel (~4.5 MB), haciendo que el OCR falle/no devuelva nada. Una imagen reducida
-      // (fileToDataUri la baja a 1536px JPEG) es mucho más liviana y confiable.
-      if (imageFile.type === 'application/pdf') {
-        console.log('📄 PDF -> imagen para OCR...');
+      // Gemini acepta el PDF directamente (probado contra la serverless: PDF crudo → 200 OK).
+      // PaddleOCR no procesa PDFs: para ese motor sí hay que convertir a imagen (1ª página).
+      if (imageFile.type === 'application/pdf' && OCR_SERVICE === 'paddleocr') {
+        console.log('📄 PDF -> imagen para PaddleOCR...');
         if (onProgress) onProgress(10);
         fileToProcess = await pdfToImage(imageFile);
         if (onProgress) onProgress(20);
