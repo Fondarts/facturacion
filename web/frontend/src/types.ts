@@ -28,7 +28,9 @@ export interface FacturaItem {
   id?: number;
   factura_id?: string;
   descripcion: string;
-  cantidad: number;
+  // Puede tener decimales (p. ej. horas: 2,5). Durante la edición se guarda
+  // como string para admitir la coma; se normaliza a número al guardar.
+  cantidad: number | string;
   precio_unitario: number;
 }
 

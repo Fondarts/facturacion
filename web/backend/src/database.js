@@ -27,7 +27,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     factura_id TEXT,
     descripcion TEXT,
-    cantidad INTEGER,
+    cantidad REAL,
     precio_unitario REAL,
     FOREIGN KEY (factura_id) REFERENCES facturas(id) ON DELETE CASCADE
   )

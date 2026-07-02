@@ -277,7 +277,7 @@ export default function FacturasList({ lockedTipo }: { lockedTipo?: 'recibida' |
     items.forEach((item, index) => {
       const descLines = doc.splitTextToSize(item.descripcion || '', 80);
       const itemHeight = Math.max(descLines.length * 5, 8);
-      const itemTotal = item.cantidad * item.precio_unitario;
+      const itemTotal = Number(String(item.cantidad).replace(',', '.')) * item.precio_unitario;
       
       if (index % 2 === 1) {
         doc.setFillColor(210, 210, 210);
@@ -285,7 +285,7 @@ export default function FacturasList({ lockedTipo }: { lockedTipo?: 'recibida' |
       }
       
       doc.text(descLines, margin + 2, yPos);
-      doc.text(item.cantidad.toString(), margin + 100, yPos);
+      doc.text(String(item.cantidad).replace('.', ','), margin + 100, yPos);
       doc.text(formatCurrencyPDF(item.precio_unitario), margin + 120, yPos);
       doc.text(formatCurrencyPDF(itemTotal), margin + 160, yPos, { align: 'right' });
       

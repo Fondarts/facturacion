@@ -10,6 +10,13 @@ type Moneda = 'EUR' | 'USD' | 'GBP';
 type FormatoFecha = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD-MM-YYYY';
 type Idioma = 'es' | 'en';
 
+// La cantidad admite decimales con coma o punto (p. ej. horas: 2,5).
+const parseCantidad = (v: number | string): number =>
+  parseFloat(String(v).replace(',', '.')) || 0;
+// Para mostrar/editar usamos coma como separador decimal.
+const formatCantidad = (v: number | string): string =>
+  String(v).replace('.', ',');
+
 export default function Facturar() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
@@ -105,7 +112,7 @@ export default function Facturar() {
   }, []);
 
   // Calcular totales
-  const subtotal = items.reduce((sum, item) => sum + (item.cantidad * item.precio_unitario), 0);
+  const subtotal = items.reduce((sum, item) => sum + (parseCantidad(item.cantidad) * item.precio_unitario), 0);
   const iva = subtotal * (formData.tasa_iva / 100);
   const total = subtotal + iva;
 
@@ -370,10 +377,10 @@ export default function Facturar() {
         doc.rect(0, yPos - itemHeight + 2, pageWidth, itemHeight, 'F');
       }
       
-      const itemTotal = item.cantidad * item.precio_unitario;
-      
+      const itemTotal = parseCantidad(item.cantidad) * item.precio_unitario;
+
       doc.text(descLines, margin + 2, yPos);
-      doc.text(item.cantidad.toString(), margin + 100, yPos);
+      doc.text(formatCantidad(item.cantidad), margin + 100, yPos);
       doc.text(formatCurrency(item.precio_unitario), margin + 120, yPos);
       doc.text(formatCurrency(itemTotal), margin + 160, yPos, { align: 'right' });
       
@@ -427,7 +434,7 @@ export default function Facturar() {
       data.append('iva', iva.toString());
       data.append('total', total.toString());
       data.append('tipo', 'generada');
-      data.append('items', JSON.stringify(items));
+      data.append('items', JSON.stringify(items.map(it => ({ ...it, cantidad: parseCantidad(it.cantidad) }))));
       // Guardar datos adicionales para regenerar el PDF
       data.append('from', formData.from);
       data.append('moneda', formData.moneda);
@@ -731,10 +738,11 @@ export default function Facturar() {
                 </div>
                 <div className="col-span-2">
                   <input
-                    type="number"
-                    min="1"
-                    value={item.cantidad}
-                    onChange={(e) => updateItem(index, 'cantidad', parseInt(e.target.value) || 1)}
+                    type="text"
+                    inputMode="decimal"
+                    value={formatCantidad(item.cantidad)}
+                    onChange={(e) => updateItem(index, 'cantidad', e.target.value.replace(/[^\d.,]/g, '').replace(/\./g, ','))}
+                    onBlur={(e) => { if (!e.target.value.trim()) updateItem(index, 'cantidad', 1); }}
                     className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white text-center text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                   />
                 </div>
@@ -750,7 +758,7 @@ export default function Facturar() {
                   />
                 </div>
                 <div className="col-span-1 text-right text-white font-medium">
-                  {formatCurrency(item.cantidad * item.precio_unitario)}
+                  {formatCurrency(parseCantidad(item.cantidad) * item.precio_unitario)}
                 </div>
                 <div className="col-span-1 flex justify-end">
                   <button
